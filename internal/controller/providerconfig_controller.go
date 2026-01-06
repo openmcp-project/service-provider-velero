@@ -27,7 +27,7 @@ import (
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 
-	v1alpha1 "github.com/openmcp-project/service-provider-template/api/v1alpha1"
+	v1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 )
 
 // ProviderConfigReconciler reconciles a ProviderConfig object

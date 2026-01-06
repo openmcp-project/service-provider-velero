@@ -34,8 +34,8 @@ func TestMain(m *testing.M) {
 		},
 		ServiceProviders: []providers.ServiceProviderSetup{
 			{
-				Name:  "foo",
-				Image: "controller:latest",
+				Name:  "velero",
+				Image: "ghcr.io/openmcp-project/images/service-provider-velero:0.0.1",
 			},
 		},
 	}

@@ -1,6 +1,6 @@
 apiVersion: velero.services.openmcp.cloud/v1alpha1
-kind: ProviderConfig
+kind: Velero
 metadata:
-  name: default
+  name: test-mcp
 spec:
-  pollInterval: 1m
+  foo: bar
