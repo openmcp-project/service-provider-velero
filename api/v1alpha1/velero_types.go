@@ -17,22 +17,40 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// InstancePhase is a custom type representing the phase of a service instance.
+type InstancePhase string
+
+// Constants representing the phases of an instance lifecycle.
+const (
+	Pending     InstancePhase = "Pending"
+	Progressing InstancePhase = "Progressing"
+	Ready       InstancePhase = "Ready"
+	Failed      InstancePhase = "Failed"
+	Terminating InstancePhase = "Terminating"
+	Unknown     InstancePhase = "Unknown"
+)
 
 // VeleroSpec defines the desired state of Velero
 type VeleroSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// The Velero image to use.
+	// +kubebuilder:default=velero/velero
+	Image string `json:"image"`
+	// The Velero version.
+	Version string `json:"version"`
+	// Plugins that should be installed.
+	Plugins []VeleroPlugin `json:"plugins"`
+}
 
-	// foo is an example field of Velero. Edit velero_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+// VeleroPlugin defines a velero plugin
+type VeleroPlugin struct {
+	// The Velero plugin image to use.
+	Image string `json:"image"`
+	// The Velero plugin version.
+	Version string `json:"version"`
 }
 
 // VeleroStatus defines the observed state of Velero.
@@ -59,7 +77,16 @@ type VeleroStatus struct {
 	// ObservedGeneration is the generation of this resource that was last reconciled by the controller.
 	ObservedGeneration int64 `json:"observedGeneration"`
 	// Phase is the current phase of the resource.
-	Phase string `json:"phase"`
+	Phase     string            `json:"phase"`
+	Resources []ManagedResource `json:"resources"`
+}
+
+// ManagedResource defines a kubernetes object with its lifecycle phase
+type ManagedResource struct {
+	corev1.TypedObjectReference `json:",inline"`
+
+	Phase   InstancePhase `json:"phase"`
+	Message string        `json:"message,omitempty"`
 }
 
 // Velero is the Schema for the veleros API

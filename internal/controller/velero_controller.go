@@ -18,19 +18,28 @@ package controller
 
 import (
 	"context"
+	"reflect"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	"github.com/openmcp-project/openmcp-operator/lib/clusteraccess"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
+
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
+	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
+	"github.com/openmcp-project/service-provider-velero/pkg/utils"
 )
 
 // VeleroReconciler reconciles a Velero object
@@ -41,15 +50,89 @@ type VeleroReconciler struct {
 }
 
 // CreateOrUpdate is called on every add or update event
-func (r *VeleroReconciler) CreateOrUpdate(_ context.Context, _ *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, _ *clusters.Cluster) (ctrl.Result, error) {
-	// TODO
+func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster) (ctrl.Result, error) {
+	l := log.FromContext(ctx)
+	mgr := configResources(obj, mcp, mcp)
+	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+	results := mgr.Apply(ctx)
+	for _, r := range results {
+		if r.Error != nil {
+			l.Error(r.Error, utils.ObjectID(r.Object.GetObject()))
+		}
+	}
+	managedResources := resultsToResources(results)
+	obj.Status.Resources = managedResources
+	if allResourcesReady(managedResources) {
+		spruntime.StatusReady(obj)
+	}
 	return ctrl.Result{}, nil
 }
 
 // Delete is called on every delete event
-func (r *VeleroReconciler) Delete(_ context.Context, _ *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, _ *clusters.Cluster) (ctrl.Result, error) {
-	// TODO
-	return ctrl.Result{}, nil
+func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster) (ctrl.Result, error) {
+	l := log.FromContext(ctx)
+	mgr := configResources(obj, mcp, mcp)
+	spruntime.StatusTerminating(obj)
+	results := mgr.Delete(ctx)
+	for _, r := range results {
+		if r.Error != nil {
+			l.Error(r.Error, utils.ObjectID(r.Object.GetObject()))
+		}
+	}
+	if resources.AllDeleted(results) {
+		return ctrl.Result{}, nil
+	}
+	return ctrl.Result{
+		Requeue:      false,
+		RequeueAfter: time.Second * 5,
+	}, nil
+}
+
+func configResources(obj *apiv1alpha1.Velero, mcp *clusters.Cluster, workload *clusters.Cluster) *resources.Manager {
+	// mcp cluster resources
+	remoteCluster := resources.NewManagedCluster(mcp.Client(), mcp.RESTConfig(), "velero")
+	namespace.Configure(remoteCluster)
+	// workload cluster resources
+	workloadCluster := resources.NewManagedCluster(workload.Client(), workload.RESTConfig(), obj.Namespace)
+	// manager
+	mgr := resources.NewManager()
+	mgr.AddCluster(remoteCluster)
+	mgr.AddCluster(workloadCluster)
+	return mgr
+}
+
+func resultsToResources(results []resources.Result) []apiv1alpha1.ManagedResource {
+	resources := []apiv1alpha1.ManagedResource{}
+	for _, res := range results {
+		obj := res.Object.GetObject()
+		status := res.Object.GetStatus()
+		resources = append(resources, apiv1alpha1.ManagedResource{
+			TypedObjectReference: corev1.TypedObjectReference{
+				Kind:      reflect.TypeOf(obj).Elem().Name(),
+				Name:      obj.GetName(),
+				Namespace: nilIfEmptyString(obj.GetNamespace()),
+			},
+			Phase:   status.Phase,
+			Message: status.Message,
+		})
+	}
+	return resources
+}
+
+func nilIfEmptyString(str string) *string {
+	if str == "" {
+		return nil
+	}
+	return ptr.To(str)
+}
+
+func allResourcesReady(resources []apiv1alpha1.ManagedResource) bool {
+	for _, res := range resources {
+		if res.Phase != apiv1alpha1.Ready {
+			return false
+		}
+	}
+	return true
 }
 
 // SetupWithManager sets up the controller with the Manager.
