@@ -1,63 +1,28 @@
 [![REUSE status](https://api.reuse.software/badge/github.com/openmcp-project/service-provider-template)](https://api.reuse.software/info/github.com/openmcp-project/service-provider-template)
 
-# service-provider-template
+# service-provider-velero
 
 ## About this project
 
-A template for building @openmcp-project Service Providers
+Managed [velero](https://velero.io) offering for [openmcp](https://github.com/openmcp-project).
 
 ## Requirements and Setup
 
-1. Create a new repository based on this template.
-2. Execute the template to create a new `ServiceProvider`.
-3. Test your `ServiceProvider`.
-
-The template includes a basic code generation command that lets you create a `ServiceProvider` for your Go module, API kind and group.
-You can also choose to add sample code to get a fully functional `ServiceProvider`.
-
-For a complete usage overview with the default settings, run:
-
-```shell
-go run ./cmd/template -h
-```
-
-Then execute the template, for example:
-
-```shell
-go run ./cmd/template -module github.com/yourorg/yourrepo -kind YourKind -group yourgroup
-```
-
-Running End-to-End tests:
+Run End-to-End tests:
 
 ```shell
 task test-e2e
 ```
 
-## CLI Flags
+## End-User facing API
 
-### Template Generator Flags
+- version: velero version to install
+- plugins: currently unrestricted
 
-The template generator (`cmd/template`) supports the following flags:
+## Platform Operator facing API
 
-- `-module`: Go module path (default: `github.com/openmcp-project/service-provider-template`)
-- `-kind`: GVK kind name (default: `FooService`)
-- `-group`: GVK group prefix, will be suffixed with `services.openmcp.cloud` (default: `foo`)
-- `-v`: Generate with sample code (default: `false`)
-
-### Service Provider Runtime Flags
-
-The generated service provider supports the following runtime flags:
-
-- `--verbosity`: Logging verbosity level (see [controller-runtime logging](https://github.com/kubernetes-sigs/controller-runtime/blob/main/TMP-LOGGING.md))
-- `--environment`: Name of the environment (required for operation)
-- `--provider-name`: Name of the provider resource (required for operation)
-- `--metrics-bind-address`: Address for the metrics endpoint (default: `0`, use `:8443` for HTTPS or `:8080` for HTTP)
-- `--health-probe-bind-address`: Address for health probe endpoint (default: `:8081`)
-- `--leader-elect`: Enable leader election for controller manager (default: `false`)
-- `--metrics-secure`: Serve metrics endpoint securely via HTTPS (default: `true`)
-- `--enable-http2`: Enable HTTP/2 for metrics and webhook servers (default: `false`)
-
-For a complete list of available flags, run the generated binary with `-h` or `--help`.
+- PollInterval for drift detection
+- ImagePullSecretRef allows to pull velero (plugin) images from private registries
 
 ## Support, Feedback, Contributing
 

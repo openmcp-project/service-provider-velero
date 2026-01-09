@@ -33,9 +33,14 @@ import (
 	"github.com/openmcp-project/openmcp-operator/lib/clusteraccess"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
+	"github.com/openmcp-project/service-provider-velero/pkg/authn"
+	"github.com/openmcp-project/service-provider-velero/pkg/authz"
+	"github.com/openmcp-project/service-provider-velero/pkg/crds"
+	"github.com/openmcp-project/service-provider-velero/pkg/deploy"
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
@@ -52,7 +57,10 @@ type VeleroReconciler struct {
 // CreateOrUpdate is called on every add or update event
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
-	mgr := configResources(obj, mcp, mcp)
+	mgr, err := configResources(obj, mcp, mcp)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
 	results := mgr.Apply(ctx)
 	for _, r := range results {
@@ -71,7 +79,10 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 // Delete is called on every delete event
 func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
-	mgr := configResources(obj, mcp, mcp)
+	mgr, err := configResources(obj, mcp, mcp)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	spruntime.StatusTerminating(obj)
 	results := mgr.Delete(ctx)
 	for _, r := range results {
@@ -83,22 +94,39 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{
-		Requeue:      false,
 		RequeueAfter: time.Second * 5,
 	}, nil
 }
 
-func configResources(obj *apiv1alpha1.Velero, mcp *clusters.Cluster, workload *clusters.Cluster) *resources.Manager {
-	// mcp cluster resources
-	remoteCluster := resources.NewManagedCluster(mcp.Client(), mcp.RESTConfig(), "velero")
-	namespace.Configure(remoteCluster)
-	// workload cluster resources
-	workloadCluster := resources.NewManagedCluster(workload.Client(), workload.RESTConfig(), obj.Namespace)
+func configResources(obj *apiv1alpha1.Velero, mcp *clusters.Cluster, workload *clusters.Cluster) (*resources.Manager, error) {
+	workloadCluster := resources.NewManagedCluster(workload.Client(), workload.RESTConfig(), "velero")
+	mcpCluster := resources.NewManagedCluster(mcp.Client(), mcp.RESTConfig(), "velero")
+	// ### MCP RESOURCES ###
+	namespace.Configure(mcpCluster)
+	// service account
+	mcpServiceAccount := &authn.ManagedServiceAccount{
+		NamespacedName: types.NamespacedName{
+			Name:      "velero-server",
+			Namespace: mcpCluster.GetDefaultNamespace(),
+		},
+	}
+	tokenFunc := mcpServiceAccount.Configure(workloadCluster, mcpCluster)
+	if err := crds.Configure(mcpCluster); err != nil {
+		return nil, err
+	}
+	// creates ClusterRolebinding to ClusterRole cluster-admin for ServiceAccount 'velero-server'
+	authz.Configure(mcpCluster, mcpServiceAccount)
+
+	// ### WORKLOAD RESOURCES ###
+	// create velero namespace
+	namespace.Configure(workloadCluster)
+	deploy.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, tokenFunc)
+
 	// manager
 	mgr := resources.NewManager()
-	mgr.AddCluster(remoteCluster)
+	mgr.AddCluster(mcpCluster)
 	mgr.AddCluster(workloadCluster)
-	return mgr
+	return mgr, nil
 }
 
 func resultsToResources(results []resources.Result) []apiv1alpha1.ManagedResource {

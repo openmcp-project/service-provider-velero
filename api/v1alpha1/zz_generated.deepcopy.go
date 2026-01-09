@@ -5,6 +5,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -90,6 +91,11 @@ func (in *ProviderConfigSpec) DeepCopyInto(out *ProviderConfigSpec) {
 	if in.PollInterval != nil {
 		in, out := &in.PollInterval, &out.PollInterval
 		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.ImagePullSecretRef != nil {
+		in, out := &in.ImagePullSecretRef, &out.ImagePullSecretRef
+		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
 }
