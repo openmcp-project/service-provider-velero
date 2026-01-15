@@ -6,12 +6,15 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -36,6 +39,24 @@ func TestServiceProvider(t *testing.T) {
 		Assess("verify service can be successfylly consumed", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			onboardingConfig, err := clusterutils.OnboardingConfig()
 			if err != nil {
+				t.Error(err)
+				return ctx
+			}
+			// wait for velero api to be established
+			crd := apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "veleroes.velero.services.openmcp.cloud"},
+			}
+			apiextensionsv1.AddToScheme(onboardingConfig.Client().Resources().GetScheme())
+			if err := wait.For(conditions.New(onboardingConfig.Client().Resources().WithNamespace("")).
+				ResourceMatch(&crd, func(obj k8s.Object) bool {
+					klog.Infof("waiting for CRD (%s) condition %s %s", obj.GetName(), apiextensionsv1.Established, apiextensionsv1.ConditionTrue)
+					for _, c := range obj.(*apiextensionsv1.CustomResourceDefinition).Status.Conditions {
+						if c.Type == apiextensionsv1.Established && c.Status == apiextensionsv1.ConditionTrue {
+							return true
+						}
+					}
+					return false
+				})); err != nil {
 				t.Error(err)
 				return ctx
 			}
@@ -85,7 +106,7 @@ func TestServiceProvider(t *testing.T) {
 				Group:    "velero.io",
 				Version:  "v1",
 				Resource: "backupstoragelocations",
-			}).Namespace("velero").Get(ctx, "default", v1.GetOptions{})
+			}).Namespace("velero").Get(ctx, "default", metav1.GetOptions{})
 			if err != nil {
 				t.Error(err)
 				return ctx
@@ -125,12 +146,12 @@ func TestServiceProvider(t *testing.T) {
 			}
 			// delete nginx deployment
 			cl := kubernetes.NewForConfigOrDie(mcpConfig.Client().RESTConfig())
-			ns, err := cl.CoreV1().Namespaces().Get(ctx, "nginx-example", v1.GetOptions{})
+			ns, err := cl.CoreV1().Namespaces().Get(ctx, "nginx-example", metav1.GetOptions{})
 			if err != nil {
 				t.Error(err)
 				return ctx
 			}
-			if err := cl.CoreV1().Namespaces().Delete(ctx, "nginx-example", v1.DeleteOptions{}); err != nil {
+			if err := cl.CoreV1().Namespaces().Delete(ctx, "nginx-example", metav1.DeleteOptions{}); err != nil {
 				t.Error(err)
 				return ctx
 			}
