@@ -44,13 +44,18 @@ func TestServiceProvider(t *testing.T) {
 			}
 			// wait for velero api to be established
 			klog.Infof("onboarding cluster host: %s", onboardingConfig.Client().RESTConfig().Host)
-			if true {
+			apiextensionsv1.AddToScheme(onboardingConfig.Client().Resources().GetScheme())
+			crdList := &apiextensionsv1.CustomResourceDefinitionList{}
+			if err := onboardingConfig.Client().Resources().WithNamespace("").List(ctx, crdList); err != nil {
+				t.Error(err)
 				return ctx
+			}
+			for i, crd := range crdList.Items {
+				klog.Infof("crd listing[%v]: %s\n", i, crd.Name)
 			}
 			crd := apiextensionsv1.CustomResourceDefinition{
 				ObjectMeta: metav1.ObjectMeta{Name: "veleroes.velero.services.openmcp.cloud"},
 			}
-			apiextensionsv1.AddToScheme(onboardingConfig.Client().Resources().GetScheme())
 			if err := wait.For(conditions.New(onboardingConfig.Client().Resources().WithNamespace("")).
 				ResourceMatch(&crd, func(obj k8s.Object) bool {
 					klog.Infof("waiting for CRD (%s) condition %s %s", obj.GetName(), apiextensionsv1.Established, apiextensionsv1.ConditionTrue)
