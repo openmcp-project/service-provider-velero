@@ -77,7 +77,9 @@ type VeleroStatus struct {
 	// ObservedGeneration is the generation of this resource that was last reconciled by the controller.
 	ObservedGeneration int64 `json:"observedGeneration"`
 	// Phase is the current phase of the resource.
-	Phase     string            `json:"phase"`
+	Phase string `json:"phase"`
+	// Resources managed by this velero instance
+	// +optional
 	Resources []ManagedResource `json:"resources"`
 }
 

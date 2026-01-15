@@ -55,9 +55,9 @@ type VeleroReconciler struct {
 }
 
 // CreateOrUpdate is called on every add or update event
-func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster) (ctrl.Result, error) {
+func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
-	mgr, err := configResources(obj, mcp, mcp)
+	mgr, err := configResources(obj, clusters.MCPCluster, clusters.WorkloadCluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -77,13 +77,13 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 }
 
 // Delete is called on every delete event
-func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster) (ctrl.Result, error) {
+func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
-	mgr, err := configResources(obj, mcp, mcp)
+	spruntime.StatusTerminating(obj)
+	mgr, err := configResources(obj, clusters.MCPCluster, clusters.WorkloadCluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	spruntime.StatusTerminating(obj)
 	results := mgr.Delete(ctx)
 	for _, r := range results {
 		if r.Error != nil {
@@ -116,6 +116,8 @@ func configResources(obj *apiv1alpha1.Velero, mcp *clusters.Cluster, workload *c
 	}
 	// creates ClusterRolebinding to ClusterRole cluster-admin for ServiceAccount 'velero-server'
 	authz.Configure(mcpCluster, mcpServiceAccount)
+	// create 'dummy' deployment
+	deploy.ConfigureMcp(mcpCluster, mcpCluster.GetDefaultNamespace(), obj)
 
 	// ### WORKLOAD RESOURCES ###
 	// create velero namespace

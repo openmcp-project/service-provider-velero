@@ -145,3 +145,67 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 	})
 	localCluster.AddObject(deployment)
 }
+
+func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero) {
+	// workaround for velero expecting a deployment called 'velero' on the same cluster it watches its API/CRDs
+	// we deploy a 0 scale deployment on the mcp
+	deployment := resources.NewManagedObject(&appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "velero",
+			Namespace: localCluster.GetDefaultNamespace(),
+		},
+	}, resources.ManagedObjectContext{
+		ReconcileFunc: func(ctx context.Context, o client.Object) error {
+			oDeploy := o.(*appsv1.Deployment)
+
+			labels := getPodLabels(velero)
+			for key, value := range labels {
+				metav1.SetMetaDataLabel(&oDeploy.ObjectMeta, key, value)
+			}
+
+			oDeploy.Spec = appsv1.DeploymentSpec{
+				Replicas: ptr.To[int32](0),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: labels,
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: labels,
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:            "velero",
+								Image:           fmt.Sprintf("%s:%s", velero.Spec.Image, velero.Spec.Version),
+								ImagePullPolicy: corev1.PullIfNotPresent,
+							},
+						},
+					},
+				},
+			}
+			return nil
+		},
+		StatusFunc: func(o client.Object) resources.Status {
+			deploy := o.(*appsv1.Deployment)
+			if !deploy.DeletionTimestamp.IsZero() {
+				return resources.Status{
+					Phase:   v1alpha1.Terminating,
+					Message: "Deployment is terminating.",
+				}
+			}
+			desired := ptr.Deref(deploy.Spec.Replicas, 1)
+			ready := deploy.Status.ReadyReplicas
+			if desired != ready {
+				return resources.Status{
+					Phase:   v1alpha1.Progressing,
+					Message: "Waiting for all pods to become ready.",
+				}
+			}
+			return resources.Status{
+				Phase:   v1alpha1.Ready,
+				Message: "All pods are ready.",
+			}
+		},
+	})
+	localCluster.AddObject(deployment)
+}

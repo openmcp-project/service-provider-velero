@@ -61,6 +61,7 @@ var (
 	platformScheme   = runtime.NewScheme()
 	onboardingScheme = runtime.NewScheme()
 	mcpScheme        = runtime.NewScheme()
+	workloadScheme   = runtime.NewScheme()
 	setupLog         = ctrl.Log.WithName("setup")
 )
 
@@ -69,6 +70,7 @@ func init() {
 	initPlatformScheme()
 	initOnboardingScheme()
 	initMcpScheme()
+	initWorkloadScheme()
 }
 
 func initPlatformScheme() {
@@ -88,6 +90,10 @@ func initOnboardingScheme() {
 func initMcpScheme() {
 	utilruntime.Must(clientgoscheme.AddToScheme(mcpScheme))
 	utilruntime.Must(apiextensionv1.AddToScheme(mcpScheme))
+}
+
+func initWorkloadScheme() {
+	utilruntime.Must(clientgoscheme.AddToScheme(workloadScheme))
 }
 
 // nolint:gocyclo
@@ -301,13 +307,19 @@ func main() {
 		PlatformCluster:   platformCluster,
 		ClusterAccessReconciler: clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
+			WithWorkloadScheme(workloadScheme).
 			WithRetryInterval(10 * time.Second).
 			WithMCPPermissions(adminPermissions).WithMCPRoleRefs([]common.RoleRef{
 			{
 				Name: "cluster-admin",
 				Kind: "ClusterRole",
 			},
-		}).SkipWorkloadCluster(),
+		}).WithWorkloadPermissions(adminPermissions).WithWorkloadRoleRefs([]common.RoleRef{
+			{
+				Name: "cluster-admin",
+				Kind: "ClusterRole",
+			},
+		}),
 	}).SetupWithManager(mgr, providerConfigUpdates); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)

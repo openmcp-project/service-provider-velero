@@ -63,8 +63,18 @@ func TestServiceProvider(t *testing.T) {
 				t.Error(err)
 				return ctx
 			}
+			workloadConfig, err := clusterutils.ConfigByPrefix("workload", "velero")
+			if err != nil {
+				t.Error(err)
+				return ctx
+			}
+			_, err = resources.CreateObjectsFromDir(ctx, workloadConfig, "workload")
+			if err != nil {
+				t.Error(err)
+				return ctx
+			}
 			// wait for minio (s3 compatible object storage) to be available
-			if err := wait.For(conditions.New(mcpConfig.Client().Resources()).
+			if err := wait.For(conditions.New(workloadConfig.Client().Resources()).
 				DeploymentAvailable("minio", "velero")); err != nil {
 				t.Error(err)
 				return ctx

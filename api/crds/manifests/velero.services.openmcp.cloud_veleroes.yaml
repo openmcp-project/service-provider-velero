@@ -157,6 +157,7 @@ spec:
                 description: Phase is the current phase of the resource.
                 type: string
               resources:
+                description: Resources managed by this velero instance
                 items:
                   description: ManagedResource defines a kubernetes object with its
                     lifecycle phase
@@ -194,7 +195,6 @@ spec:
             required:
             - observedGeneration
             - phase
-            - resources
             type: object
         required:
         - spec
