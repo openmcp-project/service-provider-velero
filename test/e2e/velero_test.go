@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -33,6 +34,41 @@ func TestServiceProvider(t *testing.T) {
 		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			if _, err := resources.CreateObjectsFromDir(ctx, c, "platform"); err != nil {
 				t.Errorf("failed to create platform cluster objects: %v", err)
+			}
+			return ctx
+		}).
+		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			serverVersion, err := discovery.NewDiscoveryClientForConfigOrDie(c.Client().RESTConfig()).ServerVersion()
+			if err != nil {
+				t.Error(err)
+				return ctx
+			}
+			klog.Infof("platform server version: %s", serverVersion)
+			onboardingConfig, err := clusterutils.OnboardingConfig()
+			if err != nil {
+				t.Error(err)
+				return ctx
+			}
+			serverVersion, err = discovery.NewDiscoveryClientForConfigOrDie(onboardingConfig.Client().RESTConfig()).ServerVersion()
+			if err != nil {
+				t.Error(err)
+				return ctx
+			}
+			klog.Infof("onboarding server version: %s", serverVersion)
+			return ctx
+		}).
+		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			if err := providers.DeleteServiceProvider(ctx, c, "velero", wait.WithTimeout(2*time.Minute)); err != nil {
+				t.Error(err)
+			}
+			return ctx
+		}).
+		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			if err := providers.InstallServiceProvider(ctx, c, providers.ServiceProviderSetup{
+				Name:  "velero",
+				Image: "ghcr.io/openmcp-project/images/service-provider-velero:0.0.1",
+			}); err != nil {
+				t.Error(err)
 			}
 			return ctx
 		}).
