@@ -6,15 +6,12 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -39,33 +36,6 @@ func TestServiceProvider(t *testing.T) {
 		Assess("verify service can be successfylly consumed", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			onboardingConfig, err := clusterutils.OnboardingConfig()
 			if err != nil {
-				t.Error(err)
-				return ctx
-			}
-			// wait for velero api to be established
-			klog.Infof("onboarding cluster host: %s", onboardingConfig.Client().RESTConfig().Host)
-			apiextensionsv1.AddToScheme(onboardingConfig.Client().Resources().GetScheme())
-			crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-			if err := onboardingConfig.Client().Resources().WithNamespace("").List(ctx, crdList); err != nil {
-				t.Error(err)
-				return ctx
-			}
-			for i, crd := range crdList.Items {
-				klog.Infof("crd listing[%v]: %s\n", i, crd.Name)
-			}
-			crd := apiextensionsv1.CustomResourceDefinition{
-				ObjectMeta: metav1.ObjectMeta{Name: "veleroes.velero.services.openmcp.cloud"},
-			}
-			if err := wait.For(conditions.New(onboardingConfig.Client().Resources().WithNamespace("")).
-				ResourceMatch(&crd, func(obj k8s.Object) bool {
-					klog.Infof("waiting for CRD (%s) condition %s %s", obj.GetName(), apiextensionsv1.Established, apiextensionsv1.ConditionTrue)
-					for _, c := range obj.(*apiextensionsv1.CustomResourceDefinition).Status.Conditions {
-						if c.Type == apiextensionsv1.Established && c.Status == apiextensionsv1.ConditionTrue {
-							return true
-						}
-					}
-					return false
-				})); err != nil {
 				t.Error(err)
 				return ctx
 			}

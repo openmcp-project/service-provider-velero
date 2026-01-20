@@ -52,6 +52,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
+
 	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/internal/controller"
 	// +kubebuilder:scaffold:imports
@@ -302,10 +304,11 @@ func main() {
 		os.Exit(1)
 	}
 	providerConfigUpdates := make(chan event.GenericEvent)
-	if err := (&controller.VeleroReconciler{
-		OnboardingCluster: onboardingCluster,
-		PlatformCluster:   platformCluster,
-		ClusterAccessReconciler: clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
+	spr := spruntime.NewSPReconciler[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig]().
+		WithPlatformCluster(platformCluster).
+		WithOnboardingCluster(onboardingCluster).
+		WithDomainServiceReconciler(&controller.VeleroReconciler{}).
+		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
 			WithWorkloadScheme(workloadScheme).
 			WithRetryInterval(10 * time.Second).
@@ -313,14 +316,14 @@ func main() {
 			{
 				Name: "cluster-admin",
 				Kind: "ClusterRole",
-			},
-		}).WithWorkloadPermissions(adminPermissions).WithWorkloadRoleRefs([]common.RoleRef{
+			}}).
+			WithWorkloadPermissions(adminPermissions).WithWorkloadRoleRefs([]common.RoleRef{
 			{
 				Name: "cluster-admin",
 				Kind: "ClusterRole",
 			},
-		}),
-	}).SetupWithManager(mgr, providerConfigUpdates); err != nil {
+		}))
+	if err := spr.SetupWithManager(mgr, providerConfigUpdates); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}

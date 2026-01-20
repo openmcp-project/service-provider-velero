@@ -22,15 +22,9 @@ import (
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
-	"github.com/openmcp-project/openmcp-operator/lib/clusteraccess"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,9 +43,6 @@ import (
 
 // VeleroReconciler reconciles a Velero object
 type VeleroReconciler struct {
-	OnboardingCluster       *clusters.Cluster
-	PlatformCluster         *clusters.Cluster
-	ClusterAccessReconciler clusteraccess.Reconciler
 }
 
 // CreateOrUpdate is called on every add or update event
@@ -163,46 +154,4 @@ func allResourcesReady(resources []apiv1alpha1.ManagedResource) bool {
 		}
 	}
 	return true
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *VeleroReconciler) SetupWithManager(mgr ctrl.Manager, providerConfigUpdates chan event.GenericEvent) error {
-	spReconciler := spruntime.SPReconciler[*apiv1alpha1.Velero, *apiv1alpha1.ProviderConfig]{
-		OnboardingCluster:       r.OnboardingCluster,
-		PlatformCluster:         r.PlatformCluster,
-		ClusterAccessReconciler: r.ClusterAccessReconciler,
-		DomainServiceReconciler: r,
-	}
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&apiv1alpha1.Velero{}).
-		// sets up reconciles whenever provider config controller sends update events
-		WatchesRawSource(
-			source.Channel(
-				providerConfigUpdates,
-				handler.EnqueueRequestsFromMapFunc(
-					func(ctx context.Context, obj client.Object) []reconcile.Request {
-						// update cached provider config
-						if obj != nil {
-							copyPC := obj.(*apiv1alpha1.ProviderConfig).DeepCopy()
-							spReconciler.ProviderConfig.Store(&copyPC)
-						} else {
-							spReconciler.ProviderConfig.Store(nil)
-						}
-						// reconcile all existing objects
-						var list apiv1alpha1.VeleroList
-						if err := r.OnboardingCluster.Client().List(ctx, &list); err != nil {
-							return nil
-						}
-						reqs := make([]reconcile.Request, len(list.Items))
-						for i := range list.Items {
-							reqs[i] = reconcile.Request{
-								NamespacedName: client.ObjectKeyFromObject(&list.Items[i]),
-							}
-						}
-						return reqs
-					},
-				)),
-		).
-		Named("velero").
-		Complete(&spReconciler)
 }
