@@ -333,13 +333,3 @@ func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, providerConfigU
 		Named("velero").
 		Complete(r)
 }
-
-func Copy[T any, PT interface {
-	*T
-	DeepCopy() *T
-}](in PT) *T {
-	if in == nil {
-		return nil
-	}
-	return in.DeepCopy()
-}

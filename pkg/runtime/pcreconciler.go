@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package runtime
 
 import (
 	"context"
+	"reflect"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,45 +32,64 @@ import (
 )
 
 // ProviderConfigReconciler reconciles a ProviderConfig object
-type ProviderConfigReconciler struct {
-	PlatformCluster       *clusters.Cluster
-	OnboardingCluster     *clusters.Cluster
-	ProviderUpdateChannel chan event.GenericEvent
+type PCReconciler[T ProviderConfig] struct {
+	platformCluster       *clusters.Cluster
+	onboardingCluster     *clusters.Cluster
+	providerUpdateChannel chan event.GenericEvent
 }
 
-// +kubebuilder:rbac:groups=foos.services.openmcp.cloud,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=foo.services.openmcp.cloud,resources=providerconfigs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=foo.services.openmcp.cloud,resources=providerconfigs/finalizers,verbs=update
+func NewPCReconciler[T ProviderConfig]() *PCReconciler[T] {
+	return &PCReconciler[T]{}
+}
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ProviderConfig object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
+func (r *PCReconciler[T]) WithPlatformCluster(c *clusters.Cluster) *PCReconciler[T] {
+	r.platformCluster = c
+	return r
+}
+
+func (r *PCReconciler[T]) WithOnboardingCluster(c *clusters.Cluster) *PCReconciler[T] {
+	r.onboardingCluster = c
+	return r
+}
+
+func (r *PCReconciler[T]) WithUpdateChannel(c chan event.GenericEvent) *PCReconciler[T] {
+	r.providerUpdateChannel = c
+	return r
+}
+
+// helper to create an empty ProviderConfig objects
+// background is the pointer/value receiver mismatch of the generated api types
+// that don't satisfy client.Object
+func (r *PCReconciler[T]) emptyObject() T {
+	var t T
+	// create elem based on type
+	val := reflect.New(reflect.TypeOf(t).Elem())
+	// cast empty elem back
+	return val.Interface().(T)
+}
+
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
-func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *PCReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var obj v1alpha1.ProviderConfig
 	notify := event.GenericEvent{}
-	if err := r.PlatformCluster.Client().Get(ctx, req.NamespacedName, &obj); err != nil {
-		r.ProviderUpdateChannel <- notify
+	if err := r.platformCluster.Client().Get(ctx, req.NamespacedName, &obj); err != nil {
+		r.providerUpdateChannel <- notify
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !obj.GetDeletionTimestamp().IsZero() {
-		r.ProviderUpdateChannel <- notify
+		r.providerUpdateChannel <- notify
 		return ctrl.Result{}, nil
 	}
 	notify.Object = obj.DeepCopy()
-	r.ProviderUpdateChannel <- notify
+	r.providerUpdateChannel <- notify
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PCReconciler[T]) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		WatchesRawSource(source.Kind(r.PlatformCluster.Cluster().GetCache(), &v1alpha1.ProviderConfig{}, &handler.TypedEnqueueRequestForObject[*v1alpha1.ProviderConfig]{})).
+		WatchesRawSource(source.Kind(r.platformCluster.Cluster().GetCache(), r.emptyObject(), &handler.TypedEnqueueRequestForObject[T]{})).
 		Named("providerconfig").
 		Complete(r)
 }

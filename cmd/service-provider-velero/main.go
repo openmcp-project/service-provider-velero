@@ -327,11 +327,11 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}
-	if err := (&controller.ProviderConfigReconciler{
-		PlatformCluster:       platformCluster,
-		OnboardingCluster:     onboardingCluster,
-		ProviderUpdateChannel: providerConfigUpdates,
-	}).SetupWithManager(mgr); err != nil {
+	pcr := spruntime.NewPCReconciler[*velerosv1alpha1.ProviderConfig]().
+		WithPlatformCluster(platformCluster).
+		WithOnboardingCluster(onboardingCluster).
+		WithUpdateChannel(providerConfigUpdates)
+	if err := pcr.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
 		os.Exit(1)
 	}
