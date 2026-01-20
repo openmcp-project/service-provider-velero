@@ -7,7 +7,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -16,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
-	k8sresources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -34,66 +32,6 @@ func TestServiceProvider(t *testing.T) {
 		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			if _, err := resources.CreateObjectsFromDir(ctx, c, "platform"); err != nil {
 				t.Errorf("failed to create platform cluster objects: %v", err)
-			}
-			return ctx
-		}).
-		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
-			serverVersion, err := discovery.NewDiscoveryClientForConfigOrDie(c.Client().RESTConfig()).ServerVersion()
-			if err != nil {
-				t.Error(err)
-				return ctx
-			}
-			klog.Infof("platform server version: %s", serverVersion)
-			onboardingConfig, err := clusterutils.OnboardingConfig()
-			if err != nil {
-				t.Error(err)
-				return ctx
-			}
-			serverVersion, err = discovery.NewDiscoveryClientForConfigOrDie(onboardingConfig.Client().RESTConfig()).ServerVersion()
-			if err != nil {
-				t.Error(err)
-				return ctx
-			}
-			klog.Infof("onboarding server version: %s", serverVersion)
-			return ctx
-		}).
-		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
-			if err := providers.DeleteServiceProvider(ctx, c, "velero", wait.WithTimeout(2*time.Minute)); err != nil {
-				t.Error(err)
-			}
-			return ctx
-		}).
-		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
-			if err := providers.InstallServiceProvider(ctx, c, providers.ServiceProviderSetup{
-				Name:  "velero",
-				Image: "ghcr.io/openmcp-project/images/service-provider-velero:0.0.1",
-			}); err != nil {
-				t.Error(err)
-			}
-			return ctx
-		}).
-		Setup(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
-			pods := &corev1.PodList{}
-			if err := c.Client().Resources().
-				WithNamespace("openmcp-system").
-				List(ctx, pods, k8sresources.WithLabelSelector("job-name=sp-velero-init")); err != nil {
-				t.Error(err)
-				return ctx
-			}
-			restCfg := c.Client().RESTConfig()
-			clientset, err := kubernetes.NewForConfig(restCfg)
-			if err != nil {
-				t.Error(err)
-				return ctx
-			}
-			for _, p := range pods.Items {
-				req := clientset.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{})
-				bytes, err := req.Do(ctx).Raw()
-				if err != nil {
-					t.Error(err)
-					return ctx
-				}
-				klog.Infof("pod log: %s", string(bytes))
 			}
 			return ctx
 		}).
