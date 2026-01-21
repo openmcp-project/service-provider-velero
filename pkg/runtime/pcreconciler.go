@@ -18,7 +18,6 @@ package runtime
 
 import (
 	"context"
-	"reflect"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,28 +26,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
-
-	v1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 )
 
-// ProviderConfigReconciler reconciles a ProviderConfig object
+// ProviderConfigReconciler notifies the service provider about provider config updates
+// through a shared update channel. Any provider config change results in a reconcile request
+// for every existing service provider api object.
 type PCReconciler[T ProviderConfig] struct {
 	platformCluster       *clusters.Cluster
-	onboardingCluster     *clusters.Cluster
 	providerUpdateChannel chan event.GenericEvent
+	emptyObj              func() T
 }
 
-func NewPCReconciler[T ProviderConfig]() *PCReconciler[T] {
-	return &PCReconciler[T]{}
+func NewPCReconciler[T ProviderConfig](emptyApiObj func() T) *PCReconciler[T] {
+	return &PCReconciler[T]{
+		emptyObj: emptyApiObj,
+	}
 }
 
 func (r *PCReconciler[T]) WithPlatformCluster(c *clusters.Cluster) *PCReconciler[T] {
 	r.platformCluster = c
-	return r
-}
-
-func (r *PCReconciler[T]) WithOnboardingCluster(c *clusters.Cluster) *PCReconciler[T] {
-	r.onboardingCluster = c
 	return r
 }
 
@@ -57,23 +53,12 @@ func (r *PCReconciler[T]) WithUpdateChannel(c chan event.GenericEvent) *PCReconc
 	return r
 }
 
-// helper to create an empty ProviderConfig objects
-// background is the pointer/value receiver mismatch of the generated api types
-// that don't satisfy client.Object
-func (r *PCReconciler[T]) emptyObject() T {
-	var t T
-	// create elem based on type
-	val := reflect.New(reflect.TypeOf(t).Elem())
-	// cast empty elem back
-	return val.Interface().(T)
-}
-
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
 func (r *PCReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var obj v1alpha1.ProviderConfig
+	obj := r.emptyObj()
 	notify := event.GenericEvent{}
-	if err := r.platformCluster.Client().Get(ctx, req.NamespacedName, &obj); err != nil {
+	if err := r.platformCluster.Client().Get(ctx, req.NamespacedName, obj); err != nil {
 		r.providerUpdateChannel <- notify
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -81,7 +66,7 @@ func (r *PCReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		r.providerUpdateChannel <- notify
 		return ctrl.Result{}, nil
 	}
-	notify.Object = obj.DeepCopy()
+	notify.Object = obj.DeepCopyObject().(T)
 	r.providerUpdateChannel <- notify
 	return ctrl.Result{}, nil
 }
@@ -89,7 +74,7 @@ func (r *PCReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 // SetupWithManager sets up the controller with the Manager.
 func (r *PCReconciler[T]) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		WatchesRawSource(source.Kind(r.platformCluster.Cluster().GetCache(), r.emptyObject(), &handler.TypedEnqueueRequestForObject[T]{})).
+		WatchesRawSource(source.Kind(r.platformCluster.Cluster().GetCache(), r.emptyObj(), &handler.TypedEnqueueRequestForObject[T]{})).
 		Named("providerconfig").
 		Complete(r)
 }

@@ -3,16 +3,15 @@ package runtime
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sync/atomic"
 	"time"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	"github.com/openmcp-project/openmcp-operator/lib/clusteraccess"
-	"github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -74,10 +73,13 @@ type SPReconciler[T APIObject, PC ProviderConfig] struct {
 	clusterAccessReconciler clusteraccess.Reconciler
 	domainServiceReconciler DomainServiceReconciler[T, PC]
 	providerConfig          atomic.Pointer[PC]
+	emptyObj                func() T
 }
 
-func NewSPReconciler[T APIObject, PC ProviderConfig]() *SPReconciler[T, PC] {
-	return &SPReconciler[T, PC]{}
+func NewSPReconciler[T APIObject, PC ProviderConfig](emptyApiObj func() T) *SPReconciler[T, PC] {
+	return &SPReconciler[T, PC]{
+		emptyObj: emptyApiObj,
+	}
 }
 
 func (r *SPReconciler[T, PC]) WithPlatformCluster(c *clusters.Cluster) *SPReconciler[T, PC] {
@@ -100,22 +102,11 @@ func (r *SPReconciler[T, PC]) WithDomainServiceReconciler(dsr DomainServiceRecon
 	return r
 }
 
-// helper to create an empty APIObject
-// background is the pointer/value receiver mismatch of the generated api types
-// that don't satisfy client.Object
-func (r *SPReconciler[T, PC]) emptyAPIObject() T {
-	var t T
-	// create elem based on type
-	val := reflect.New(reflect.TypeOf(t).Elem())
-	// cast empty elem back
-	return val.Interface().(T)
-}
-
 // Reconcile orchestrates platform and DomainServiceReconciler logic to reconcile APIObjects
 func (r *SPReconciler[T, PC]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := logf.FromContext(ctx)
 	// common reconciler logic including get obj, providerconfig, mcp/workload access
-	obj := r.emptyAPIObject()
+	obj := r.emptyObj()
 	if err := r.onboardingCluster.Client().Get(ctx, req.NamespacedName, obj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -301,7 +292,7 @@ func (r *SPReconciler[T, PC]) clusters(ctx context.Context, req ctrl.Request) (C
 // SetupWithManager sets up the controller with the Manager.
 func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, providerConfigUpdates chan event.GenericEvent) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.Velero{}).
+		For(r.emptyObj()).
 		// sets up reconciles whenever provider config controller sends update events
 		WatchesRawSource(
 			source.Channel(
@@ -316,7 +307,9 @@ func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, providerConfigU
 							r.providerConfig.Store(nil)
 						}
 						// reconcile all existing objects
-						var list v1alpha1.VeleroList
+						var list unstructured.UnstructuredList
+						gvk := r.emptyObj().GetObjectKind().GroupVersionKind()
+						list.SetGroupVersionKind(gvk)
 						if err := r.onboardingCluster.Client().List(ctx, &list); err != nil {
 							return nil
 						}

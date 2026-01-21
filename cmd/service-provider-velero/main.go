@@ -304,7 +304,9 @@ func main() {
 		os.Exit(1)
 	}
 	providerConfigUpdates := make(chan event.GenericEvent)
-	spr := spruntime.NewSPReconciler[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig]().
+	spr := spruntime.NewSPReconciler[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig](
+		func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} },
+	).
 		WithPlatformCluster(platformCluster).
 		WithOnboardingCluster(onboardingCluster).
 		WithDomainServiceReconciler(&controller.VeleroReconciler{}).
@@ -327,9 +329,10 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}
-	pcr := spruntime.NewPCReconciler[*velerosv1alpha1.ProviderConfig]().
+	pcr := spruntime.NewPCReconciler(func() *velerosv1alpha1.ProviderConfig {
+		return &velerosv1alpha1.ProviderConfig{}
+	}).
 		WithPlatformCluster(platformCluster).
-		WithOnboardingCluster(onboardingCluster).
 		WithUpdateChannel(providerConfigUpdates)
 	if err := pcr.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
