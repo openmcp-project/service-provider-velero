@@ -325,7 +325,7 @@ func main() {
 				Kind: "ClusterRole",
 			},
 		}))
-	if err := spr.SetupWithManager(mgr, providerConfigUpdates); err != nil {
+	if err := spr.SetupWithManager(mgr, "velero", providerConfigUpdates); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}

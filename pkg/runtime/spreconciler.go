@@ -227,6 +227,7 @@ func (r *SPReconciler[T, PC]) delete(ctx context.Context, obj T, pc PC) (ctrl.Re
 	}
 	return ctrl.Result{}, nil
 }
+
 func (r *SPReconciler[T, PC]) createOrUpdate(ctx context.Context, obj T, pc PC) (ctrl.Result, error) {
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.onboardingCluster.Client(), obj, func() error {
 		controllerutil.AddFinalizer(obj, obj.Finalizer())
@@ -290,7 +291,7 @@ func (r *SPReconciler[T, PC]) clusters(ctx context.Context, req ctrl.Request) (C
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, providerConfigUpdates chan event.GenericEvent) error {
+func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, name string, providerConfigUpdates chan event.GenericEvent) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(r.emptyObj()).
 		// sets up reconciles whenever provider config controller sends update events
@@ -323,6 +324,6 @@ func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, providerConfigU
 					},
 				)),
 		).
-		Named("velero").
+		Named(name).
 		Complete(r)
 }
