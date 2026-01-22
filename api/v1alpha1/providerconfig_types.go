@@ -41,9 +41,21 @@ type ProviderConfigSpec struct {
 	// referenced object inside the same namespace.
 	// +optional
 	ImagePullSecrets []*corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
-	// ImageOverride is an optional replacement of the default velero to pull from private registries
-	// +optional
-	ImageOverride *string `json:"imageOverride,omitempty"`
+	// AvailableImages defines the images that can be used
+	AvailableImages []AvailableVeleroImages `json:"availableImages"`
+}
+
+// AvailableVeleroImages defines the velero images that are available as part of the managed velero offering.
+type AvailableVeleroImages struct {
+	// Name of the component (velero itself or a velero plugin)
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+	// Versions of component.
+	// +kubebuilder:validation:Required
+	Versions []string `json:"versions"`
+	// Image location of the component
+	// +kubebuilder:validation:Required
+	Image string `json:"image"`
 }
 
 // ProviderConfigStatus defines the observed state of ProviderConfig.

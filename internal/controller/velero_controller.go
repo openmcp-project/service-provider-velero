@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"time"
 
@@ -46,13 +47,13 @@ type VeleroReconciler struct {
 }
 
 // CreateOrUpdate is called on every add or update event
-func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
+func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
-	mgr, err := configResources(obj, clusters.MCPCluster, clusters.WorkloadCluster)
+	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+	mgr, err := configResources(obj, pc, clusters.MCPCluster, clusters.WorkloadCluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
 	results := mgr.Apply(ctx)
 	for _, r := range results {
 		if r.Error != nil {
@@ -68,10 +69,10 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 }
 
 // Delete is called on every delete event
-func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, _ *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
+func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	spruntime.StatusTerminating(obj)
-	mgr, err := configResources(obj, clusters.MCPCluster, clusters.WorkloadCluster)
+	mgr, err := configResources(obj, pc, clusters.MCPCluster, clusters.WorkloadCluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -89,7 +90,12 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	}, nil
 }
 
-func configResources(obj *apiv1alpha1.Velero, mcp *clusters.Cluster, workload *clusters.Cluster) (*resources.Manager, error) {
+func configResources(obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster, workload *clusters.Cluster) (*resources.Manager, error) {
+	// check all requested compoments are available
+	images := resolveImages(obj.Spec, *pc)
+	if images == nil {
+		return nil, errors.New("requested version is not available")
+	}
 	workloadCluster := resources.NewManagedCluster(workload.Client(), workload.RESTConfig(), "velero")
 	mcpCluster := resources.NewManagedCluster(mcp.Client(), mcp.RESTConfig(), "velero")
 	// ### MCP RESOURCES ###
@@ -108,12 +114,12 @@ func configResources(obj *apiv1alpha1.Velero, mcp *clusters.Cluster, workload *c
 	// creates ClusterRolebinding to ClusterRole cluster-admin for ServiceAccount 'velero-server'
 	authz.Configure(mcpCluster, mcpServiceAccount)
 	// create 'dummy' deployment
-	deploy.ConfigureMcp(mcpCluster, mcpCluster.GetDefaultNamespace(), obj)
+	deploy.ConfigureMcp(mcpCluster, mcpCluster.GetDefaultNamespace(), images["velero"], obj)
 
 	// ### WORKLOAD RESOURCES ###
 	// create velero namespace
 	namespace.Configure(workloadCluster)
-	deploy.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, tokenFunc)
+	deploy.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, images, tokenFunc)
 
 	// manager
 	mgr := resources.NewManager()
@@ -154,4 +160,39 @@ func allResourcesReady(resources []apiv1alpha1.ManagedResource) bool {
 		}
 	}
 	return true
+}
+
+// maps the requested components to their images
+// returns nil if component/version is not available
+func resolveImages(velero apiv1alpha1.VeleroSpec, pc apiv1alpha1.ProviderConfig) map[string]string {
+	veleroServerImage := resolveImage("velero", velero.Version, pc)
+	if veleroServerImage == "" {
+		return nil
+	}
+	res := map[string]string{}
+	res["velero"] = veleroServerImage
+	for _, plugin := range velero.Plugins {
+		image := resolveImage(plugin.Name, plugin.Version, pc)
+		if image == "" {
+			return nil
+		}
+		res[plugin.Name] = image
+	}
+	return res
+}
+
+// returns the image of a requested component
+// or "" if the requested component is not available
+func resolveImage(name string, version string, pc apiv1alpha1.ProviderConfig) string {
+	for _, availableImage := range pc.Spec.AvailableImages {
+		if availableImage.Name != name {
+			continue
+		}
+		for _, availableVersion := range availableImage.Versions {
+			if availableVersion == version {
+				return availableImage.Image
+			}
+		}
+	}
+	return ""
 }

@@ -48,23 +48,19 @@ spec:
           spec:
             description: spec defines the desired state of Velero
             properties:
-              image:
-                default: velero/velero
-                description: The Velero image to use.
-                type: string
               plugins:
                 description: Plugins that should be installed.
                 items:
                   description: VeleroPlugin defines a velero plugin
                   properties:
-                    image:
-                      description: The Velero plugin image to use.
+                    name:
+                      description: The Velero plugin name.
                       type: string
                     version:
                       description: The Velero plugin version.
                       type: string
                   required:
-                  - image
+                  - name
                   - version
                   type: object
                 type: array
@@ -72,7 +68,6 @@ spec:
                 description: The Velero version.
                 type: string
             required:
-            - image
             - plugins
             - version
             type: object
@@ -80,16 +75,7 @@ spec:
             description: status defines the observed state of Velero
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the Velero resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: Conditions contains the conditions.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -145,9 +131,6 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
               observedGeneration:
                 description: ObservedGeneration is the generation of this resource
                   that was last reconciled by the controller.

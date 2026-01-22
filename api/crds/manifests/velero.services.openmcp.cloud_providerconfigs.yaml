@@ -41,10 +41,30 @@ spec:
           spec:
             description: spec defines the desired state of ProviderConfig
             properties:
-              imageOverride:
-                description: ImageOverride is an optional replacement of the default
-                  velero to pull from private registries
-                type: string
+              availableImages:
+                description: AvailableImages defines the images that can be used
+                items:
+                  description: AvailableVeleroImages defines the velero images that
+                    are available as part of the managed velero offering.
+                  properties:
+                    image:
+                      description: Image location of the component
+                      type: string
+                    name:
+                      description: Name of the component (velero itself or a velero
+                        plugin)
+                      type: string
+                    versions:
+                      description: Versions of component.
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - image
+                  - name
+                  - versions
+                  type: object
+                type: array
               imagePullSecrets:
                 description: |-
                   ImagePullSecrets is an optional list of references to secrets in the same
@@ -77,6 +97,8 @@ spec:
                   drift
                 format: duration
                 type: string
+            required:
+            - availableImages
             type: object
           status:
             description: status defines the observed state of ProviderConfig

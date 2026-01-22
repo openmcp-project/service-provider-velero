@@ -21,7 +21,7 @@ func getPodLabels(instance *v1alpha1.Velero) map[string]string {
 	}
 }
 
-func Configure(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero, tokenApplyFunc authn.TokenApplyFunc) {
+func Configure(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "velero",
@@ -54,7 +54,7 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 						Containers: []corev1.Container{
 							{
 								Name:            "velero",
-								Image:           fmt.Sprintf("%s:%s", velero.Spec.Image, velero.Spec.Version),
+								Image:           images["velero"],
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Command:         []string{"/velero"},
 								Args:            []string{"server"},
@@ -105,7 +105,7 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 			for i, plugin := range velero.Spec.Plugins {
 				oDeploy.Spec.Template.Spec.InitContainers = append(oDeploy.Spec.Template.Spec.InitContainers, corev1.Container{
 					Name:            fmt.Sprintf("plugin-%d", i),
-					Image:           plugin.Image,
+					Image:           images[plugin.Name],
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -146,7 +146,7 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 	localCluster.AddObject(deployment)
 }
 
-func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero) {
+func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string, image string, velero *v1alpha1.Velero) {
 	// workaround for velero expecting a deployment called 'velero' on the same cluster it watches its API/CRDs
 	// we deploy a 0 scale deployment on the mcp
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
@@ -176,7 +176,7 @@ func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string,
 						Containers: []corev1.Container{
 							{
 								Name:            "velero",
-								Image:           fmt.Sprintf("%s:%s", velero.Spec.Image, velero.Spec.Version),
+								Image:           image,
 								ImagePullPolicy: corev1.PullIfNotPresent,
 							},
 						},

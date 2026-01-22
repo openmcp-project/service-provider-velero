@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	commonapi "github.com/openmcp-project/openmcp-operator/api/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -36,9 +37,6 @@ const (
 
 // VeleroSpec defines the desired state of Velero
 type VeleroSpec struct {
-	// The Velero image to use.
-	// +kubebuilder:default=velero/velero
-	Image string `json:"image"`
 	// The Velero version.
 	Version string `json:"version"`
 	// Plugins that should be installed.
@@ -47,37 +45,16 @@ type VeleroSpec struct {
 
 // VeleroPlugin defines a velero plugin
 type VeleroPlugin struct {
-	// The Velero plugin image to use.
-	Image string `json:"image"`
+	// The Velero plugin name.
+	Name string `json:"name"`
 	// The Velero plugin version.
 	Version string `json:"version"`
 }
 
 // VeleroStatus defines the observed state of Velero.
 type VeleroStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	commonapi.Status `json:",inline"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the Velero resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	// ObservedGeneration is the generation of this resource that was last reconciled by the controller.
-	ObservedGeneration int64 `json:"observedGeneration"`
-	// Phase is the current phase of the resource.
-	Phase string `json:"phase"`
 	// Resources managed by this velero instance
 	// +optional
 	Resources []ManagedResource `json:"resources"`
