@@ -22,8 +22,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// DomainServiceReconciler implements any business logic required to manage your APIObject
-type DomainServiceReconciler[T APIObject, PC ProviderConfig] interface {
+// ServiceProviderReconciler implements any business logic required to manage your APIObject
+type ServiceProviderReconciler[T ServiceProviderAPI, PC ProviderConfig] interface {
 	// CreateOrUpdate is called on every add or update event
 	CreateOrUpdate(ctx context.Context, obj T, pc PC, clusters ClusterContext) (ctrl.Result, error)
 	// Delete is called on every delete event
@@ -37,15 +37,15 @@ type ClusterContext struct {
 	PlatformCluster *clusters.Cluster
 }
 
-// APIObject represents an onboarding api type
-type APIObject interface {
+// ServiceProviderAPI represents an onboarding api type
+type ServiceProviderAPI interface {
 	client.Object
-	APIObjectStatus
+	ServiceProviderAPIStatus
 	Finalizer() string
 }
 
-// APIObjectStatus represents the status type of an onboarding api type
-type APIObjectStatus interface {
+// ServiceProviderAPIStatus represents the status type of an onboarding api type
+type ServiceProviderAPIStatus interface {
 	// GetStatus returns the status object
 	GetStatus() any
 	// GetConditions returns the status object
@@ -67,16 +67,16 @@ type ProviderConfig interface {
 
 // SPReconciler implements a generic reconcile loop to separate platform
 // and service provider developer space.
-type SPReconciler[T APIObject, PC ProviderConfig] struct {
-	platformCluster         *clusters.Cluster
-	onboardingCluster       *clusters.Cluster
-	clusterAccessReconciler clusteraccess.Reconciler
-	domainServiceReconciler DomainServiceReconciler[T, PC]
-	providerConfig          atomic.Pointer[PC]
-	emptyObj                func() T
+type SPReconciler[T ServiceProviderAPI, PC ProviderConfig] struct {
+	platformCluster           *clusters.Cluster
+	onboardingCluster         *clusters.Cluster
+	clusterAccessReconciler   clusteraccess.Reconciler
+	serviceProviderReconciler ServiceProviderReconciler[T, PC]
+	providerConfig            atomic.Pointer[PC]
+	emptyObj                  func() T
 }
 
-func NewSPReconciler[T APIObject, PC ProviderConfig](emptyApiObj func() T) *SPReconciler[T, PC] {
+func NewSPReconciler[T ServiceProviderAPI, PC ProviderConfig](emptyApiObj func() T) *SPReconciler[T, PC] {
 	return &SPReconciler[T, PC]{
 		emptyObj: emptyApiObj,
 	}
@@ -97,8 +97,8 @@ func (r *SPReconciler[T, PC]) WithClusterAccessReconciler(car clusteraccess.Reco
 	return r
 }
 
-func (r *SPReconciler[T, PC]) WithDomainServiceReconciler(dsr DomainServiceReconciler[T, PC]) *SPReconciler[T, PC] {
-	r.domainServiceReconciler = dsr
+func (r *SPReconciler[T, PC]) WithServiceProviderReconciler(dsr ServiceProviderReconciler[T, PC]) *SPReconciler[T, PC] {
+	r.serviceProviderReconciler = dsr
 	return r
 }
 
@@ -202,7 +202,7 @@ func (r *SPReconciler[T, PC]) delete(ctx context.Context, obj T, pc PC) (ctrl.Re
 			StatusProgressing(obj, "Reconciling", "clusters being setup")
 			return res, nil
 		}
-		res, err = r.domainServiceReconciler.Delete(ctx, obj, pc, clusters)
+		res, err = r.serviceProviderReconciler.Delete(ctx, obj, pc, clusters)
 		r.updateStatus(ctx, obj, oldObj)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -243,7 +243,7 @@ func (r *SPReconciler[T, PC]) createOrUpdate(ctx context.Context, obj T, pc PC) 
 	if res.RequeueAfter > 0 {
 		return res, nil
 	}
-	return r.domainServiceReconciler.CreateOrUpdate(ctx, obj, pc, clusters)
+	return r.serviceProviderReconciler.CreateOrUpdate(ctx, obj, pc, clusters)
 }
 
 // areAccessRequestsInDeletion determines if the access requests for a reconcile request are in deletion.

@@ -93,9 +93,20 @@ func (in *ProviderConfigSpec) DeepCopyInto(out *ProviderConfigSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.ImagePullSecretRef != nil {
-		in, out := &in.ImagePullSecretRef, &out.ImagePullSecretRef
-		*out = new(corev1.LocalObjectReference)
+	if in.ImagePullSecrets != nil {
+		in, out := &in.ImagePullSecrets, &out.ImagePullSecrets
+		*out = make([]*corev1.LocalObjectReference, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(corev1.LocalObjectReference)
+				**out = **in
+			}
+		}
+	}
+	if in.ImageOverride != nil {
+		in, out := &in.ImageOverride, &out.ImageOverride
+		*out = new(string)
 		**out = **in
 	}
 }

@@ -18,7 +18,7 @@ const (
 )
 
 // StatusProgressing indicates progressing with synced false
-func StatusProgressing(obj APIObject, reason string, message string) {
+func StatusProgressing(obj ServiceProviderAPI, reason string, message string) {
 	meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
 		Type:               ServiceProviderConditionReady,
 		Status:             metav1.ConditionFalse,
@@ -31,7 +31,7 @@ func StatusProgressing(obj APIObject, reason string, message string) {
 }
 
 // StatusReady indicates ready with ready true
-func StatusReady(obj APIObject) {
+func StatusReady(obj ServiceProviderAPI) {
 	meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
 		Type:               ServiceProviderConditionReady,
 		Status:             metav1.ConditionTrue,
@@ -44,7 +44,7 @@ func StatusReady(obj APIObject) {
 }
 
 // StatusTerminating indicates terminating with synced false
-func StatusTerminating(obj APIObject) {
+func StatusTerminating(obj ServiceProviderAPI) {
 	meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
 		Type:               ServiceProviderConditionReady,
 		Status:             metav1.ConditionFalse,

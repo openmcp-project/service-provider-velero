@@ -30,7 +30,6 @@ import (
 	crdutil "github.com/openmcp-project/controller-utils/pkg/crds"
 	"github.com/openmcp-project/controller-utils/pkg/logging"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
-	"github.com/openmcp-project/openmcp-operator/api/common"
 	openmcpconst "github.com/openmcp-project/openmcp-operator/api/constants"
 	providerv1alpha1 "github.com/openmcp-project/openmcp-operator/api/provider/v1alpha1"
 	"github.com/openmcp-project/openmcp-operator/lib/clusteraccess"
@@ -309,22 +308,13 @@ func main() {
 	).
 		WithPlatformCluster(platformCluster).
 		WithOnboardingCluster(onboardingCluster).
-		WithDomainServiceReconciler(&controller.VeleroReconciler{}).
+		WithServiceProviderReconciler(&controller.VeleroReconciler{}).
 		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
 			WithWorkloadScheme(workloadScheme).
 			WithRetryInterval(10 * time.Second).
-			WithMCPPermissions(adminPermissions).WithMCPRoleRefs([]common.RoleRef{
-			{
-				Name: "cluster-admin",
-				Kind: "ClusterRole",
-			}}).
-			WithWorkloadPermissions(adminPermissions).WithWorkloadRoleRefs([]common.RoleRef{
-			{
-				Name: "cluster-admin",
-				Kind: "ClusterRole",
-			},
-		}))
+			WithMCPPermissions(mcpPermissions()).
+			WithWorkloadPermissions(workloadPermissions()))
 	if err := spr.SetupWithManager(mgr, "velero", providerConfigUpdates); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
@@ -367,4 +357,52 @@ func initializePlatformCluster() (*clusters.Cluster, error) {
 		return nil, err
 	}
 	return platformCluster, nil
+}
+
+func mcpPermissions() []clustersv1alpha1.PermissionsRequest {
+	return []clustersv1alpha1.PermissionsRequest{
+		{
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{""},
+					Resources: []string{"namespaces", "serviceaccounts"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+				{
+					APIGroups: []string{"apiextensions.k8s.io"},
+					Resources: []string{"customresourcedefinitions"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+				{
+					APIGroups: []string{"apps"},
+					Resources: []string{"deployments"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+			},
+		},
+	}
+}
+
+func workloadPermissions() []clustersv1alpha1.PermissionsRequest {
+	return []clustersv1alpha1.PermissionsRequest{
+		{
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{""},
+					Resources: []string{"namespaces", "secrets", "serviceaccounts"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+				{
+					APIGroups: []string{"apps"},
+					Resources: []string{"deployments"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+				{
+					APIGroups: []string{"rbac.authorization.k8s.io"},
+					Resources: []string{"clusterroles", "clusterrolebindings"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+			},
+		},
+	}
 }

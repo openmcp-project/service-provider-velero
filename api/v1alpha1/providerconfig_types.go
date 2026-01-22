@@ -32,9 +32,18 @@ type ProviderConfigSpec struct {
 	// +kubebuilder:default:="1m"
 	// +kubebuilder:validation:Format=duration
 	PollInterval *metav1.Duration `json:"pollInterval,omitempty"`
-	// ImagePullSecretRef references a secret to pull images from private registries
+	// ImagePullSecrets is an optional list of references to secrets in the same
+	// namespace to use for pulling any of the images used by the velero deployment. If
+	// specified, these secrets will be passed to individual puller implementations
+	// for them to use. More info:
+	// https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
+	// LocalObjectReference contains enough information to let you locate the
+	// referenced object inside the same namespace.
 	// +optional
-	ImagePullSecretRef *corev1.LocalObjectReference `json:"imagePullSecretRef,omitempty"`
+	ImagePullSecrets []*corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	// ImageOverride is an optional replacement of the default velero to pull from private registries
+	// +optional
+	ImageOverride *string `json:"imageOverride,omitempty"`
 }
 
 // ProviderConfigStatus defines the observed state of ProviderConfig.
