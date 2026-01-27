@@ -286,6 +286,7 @@ func (r *SPReconciler[T, PC]) clusters(ctx context.Context, req ctrl.Request) (C
 	}
 	return ClusterContext{
 		MCPCluster:      mcp,
+		PlatformCluster: r.platformCluster,
 		WorkloadCluster: workloadCluster,
 	}, res, nil
 }

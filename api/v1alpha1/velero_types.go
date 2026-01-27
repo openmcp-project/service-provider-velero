@@ -57,7 +57,7 @@ type VeleroStatus struct {
 
 	// Resources managed by this velero instance
 	// +optional
-	Resources []ManagedResource `json:"resources"`
+	Resources []ManagedResource `json:"resources,omitempty"`
 }
 
 // ManagedResource defines a kubernetes object with its lifecycle phase

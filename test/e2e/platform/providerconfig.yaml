@@ -11,3 +11,5 @@ spec:
     - name: aws
       versions: ["v1.13.0"]
       image: "velero/velero-plugin-for-aws"
+  imagePullSecrets:
+    - name: test

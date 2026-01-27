@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"os"
 	"time"
 
@@ -302,13 +303,20 @@ func main() {
 		setupLog.Error(err, "unable to add platform cluster to manager")
 		os.Exit(1)
 	}
+	podNamespace := os.Getenv(openmcpconst.EnvVariablePodNamespace)
+	if podNamespace == "" {
+		setupLog.Error(fmt.Errorf("environment variable %s not set - cannot determine source namespace for secrets", openmcpconst.EnvVariablePodNamespace), "pod namespace missing")
+		os.Exit(1)
+	}
 	providerConfigUpdates := make(chan event.GenericEvent)
 	spr := spruntime.NewSPReconciler[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig](
 		func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} },
 	).
 		WithPlatformCluster(platformCluster).
 		WithOnboardingCluster(onboardingCluster).
-		WithServiceProviderReconciler(&controller.VeleroReconciler{}).
+		WithServiceProviderReconciler(&controller.VeleroReconciler{
+			PodNamespace: podNamespace,
+		}).
 		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
 			WithWorkloadScheme(workloadScheme).

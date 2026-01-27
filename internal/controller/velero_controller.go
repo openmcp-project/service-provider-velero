@@ -25,8 +25,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openmcp-project/controller-utils/pkg/clusters"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -35,7 +33,8 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/authz"
 	"github.com/openmcp-project/service-provider-velero/pkg/crds"
-	"github.com/openmcp-project/service-provider-velero/pkg/deploy"
+	"github.com/openmcp-project/service-provider-velero/pkg/deployment"
+	"github.com/openmcp-project/service-provider-velero/pkg/imagepullsecrets"
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
@@ -44,13 +43,16 @@ import (
 
 // VeleroReconciler reconciles a Velero object
 type VeleroReconciler struct {
+	// PodNamespace is the namespace the service provider pod runs in
+	// e.g. required to resolve image pull secret references from the provider config
+	PodNamespace string
 }
 
 // CreateOrUpdate is called on every add or update event
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
-	mgr, err := configResources(obj, pc, clusters.MCPCluster, clusters.WorkloadCluster)
+	mgr, err := r.configResources(obj, pc, clusters)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -72,7 +74,7 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	spruntime.StatusTerminating(obj)
-	mgr, err := configResources(obj, pc, clusters.MCPCluster, clusters.WorkloadCluster)
+	mgr, err := r.configResources(obj, pc, clusters)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -90,14 +92,14 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	}, nil
 }
 
-func configResources(obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, mcp *clusters.Cluster, workload *clusters.Cluster) (*resources.Manager, error) {
+func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (*resources.Manager, error) {
 	// check all requested compoments are available
 	images := resolveImages(obj.Spec, *pc)
 	if images == nil {
 		return nil, errors.New("requested version is not available")
 	}
-	workloadCluster := resources.NewManagedCluster(workload.Client(), workload.RESTConfig(), "velero")
-	mcpCluster := resources.NewManagedCluster(mcp.Client(), mcp.RESTConfig(), "velero")
+	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster.Client(), clusters.WorkloadCluster.RESTConfig(), "velero")
+	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster.Client(), clusters.MCPCluster.RESTConfig(), "velero")
 	// ### MCP RESOURCES ###
 	namespace.Configure(mcpCluster)
 	// service account
@@ -114,12 +116,21 @@ func configResources(obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, mc
 	// creates ClusterRolebinding to ClusterRole cluster-admin for ServiceAccount 'velero-server'
 	authz.Configure(mcpCluster, mcpServiceAccount)
 	// create 'dummy' deployment
-	deploy.ConfigureMcp(mcpCluster, mcpCluster.GetDefaultNamespace(), images["velero"], obj)
+	deployment.ConfigureMcp(mcpCluster, mcpCluster.GetDefaultNamespace(), images["velero"], obj)
 
 	// ### WORKLOAD RESOURCES ###
 	// create velero namespace
+	// TODO create separate tenant namespace where each has its own velero instance
+	// TODO link onboarding api object and managed resources with additional instance status/label/annotation
 	namespace.Configure(workloadCluster)
-	deploy.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, images, tokenFunc)
+	// sync image pull secrets to workload cluster
+	secretManager := imagepullsecrets.ManagedPullSecret{
+		PlatformCluster: clusters.PlatformCluster,
+		SourceNamespace: r.PodNamespace,
+	}
+	secretManager.Configure(workloadCluster, "velero", *pc)
+	// server deployment
+	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, images, tokenFunc)
 
 	// manager
 	mgr := resources.NewManager()
