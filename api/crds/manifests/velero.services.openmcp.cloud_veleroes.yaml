@@ -154,6 +154,10 @@ spec:
                     kind:
                       description: Kind is the type of resource being referenced
                       type: string
+                    location:
+                      description: ResourceLocation is a custom type representing
+                        the location of a resource.
+                      type: string
                     message:
                       type: string
                     name:
@@ -171,6 +175,8 @@ spec:
                       type: string
                   required:
                   - kind
+                  - location
+                  - message
                   - name
                   - phase
                   type: object

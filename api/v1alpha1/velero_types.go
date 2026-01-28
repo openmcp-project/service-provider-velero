@@ -25,6 +25,9 @@ import (
 // InstancePhase is a custom type representing the phase of a service instance.
 type InstancePhase string
 
+// ResourceLocation is a custom type representing the location of a resource.
+type ResourceLocation string
+
 // Constants representing the phases of an instance lifecycle.
 const (
 	Pending     InstancePhase = "Pending"
@@ -33,6 +36,9 @@ const (
 	Failed      InstancePhase = "Failed"
 	Terminating InstancePhase = "Terminating"
 	Unknown     InstancePhase = "Unknown"
+
+	ManagedControlPlane ResourceLocation = "ManagedControlPlane"
+	WorkloadCluter      ResourceLocation = "WorkloadCluster"
 )
 
 // VeleroSpec defines the desired state of Velero
@@ -64,8 +70,9 @@ type VeleroStatus struct {
 type ManagedResource struct {
 	corev1.TypedObjectReference `json:",inline"`
 
-	Phase   InstancePhase `json:"phase"`
-	Message string        `json:"message,omitempty"`
+	Phase    InstancePhase    `json:"phase"`
+	Message  string           `json:"message"`
+	Location ResourceLocation `json:"location"`
 }
 
 // Velero is the Schema for the veleros API

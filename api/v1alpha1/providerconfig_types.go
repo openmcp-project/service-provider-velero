@@ -40,7 +40,7 @@ type ProviderConfigSpec struct {
 	// LocalObjectReference contains enough information to let you locate the
 	// referenced object inside the same namespace.
 	// +optional
-	ImagePullSecrets []*corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 	// AvailableImages defines the images that can be used
 	AvailableImages []AvailableVeleroImages `json:"availableImages"`
 }

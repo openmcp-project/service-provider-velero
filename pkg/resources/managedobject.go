@@ -21,30 +21,34 @@ func NoOp(context.Context, client.Object) error {
 	return nil
 }
 
-type StatusFunc func(o client.Object) Status
+type StatusFunc func(o client.Object, rl v1alpha1.ResourceLocation) Status
 
-func SimpleStatus(o client.Object) Status {
+func SimpleStatus(o client.Object, rl v1alpha1.ResourceLocation) Status {
 	if !o.GetDeletionTimestamp().IsZero() {
 		return Status{
-			Phase:   v1alpha1.Terminating,
-			Message: "Resource is terminating.",
+			Phase:    v1alpha1.Terminating,
+			Message:  "Resource is terminating.",
+			Location: rl,
 		}
 	}
 	if o.GetUID() == "" {
 		return Status{
-			Phase:   v1alpha1.Pending,
-			Message: "Resource has not been created yet.",
+			Phase:    v1alpha1.Pending,
+			Message:  "Resource has not been created yet.",
+			Location: rl,
 		}
 	}
 	return Status{
-		Phase:   v1alpha1.Ready,
-		Message: "Resource exists.",
+		Phase:    v1alpha1.Ready,
+		Message:  "Resource exists.",
+		Location: rl,
 	}
 }
 
 type Status struct {
-	Phase   v1alpha1.InstancePhase
-	Message string
+	Phase    v1alpha1.InstancePhase
+	Message  string
+	Location v1alpha1.ResourceLocation
 }
 
 func NewManagedObject(o client.Object, moc ManagedObjectContext) ManagedObject {
@@ -73,7 +77,7 @@ type ManagedObject interface {
 	Reconcile(ctx context.Context) error
 	GetDependencies() []ManagedObject
 	GetDeletionPolicy() DeletionPolicy
-	GetStatus() Status
+	GetStatus(v1alpha1.ResourceLocation) Status
 }
 
 var _ ManagedObject = &managedObject{}
@@ -87,13 +91,14 @@ type managedObject struct {
 }
 
 // GetStatus implements ManagedObject.
-func (m *managedObject) GetStatus() Status {
+func (m *managedObject) GetStatus(rl v1alpha1.ResourceLocation) Status {
 	if m.statusFunc != nil {
-		return m.statusFunc(m.object)
+		return m.statusFunc(m.object, rl)
 	}
 	return Status{
-		Phase:   v1alpha1.Unknown,
-		Message: "No status function defined.",
+		Phase:    v1alpha1.Unknown,
+		Message:  "No status function defined.",
+		Location: rl,
 	}
 }
 

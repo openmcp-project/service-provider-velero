@@ -58,6 +58,7 @@ func Configure(cluster resources.ManagedCluster) error {
 				oCRD.Spec = desired.Spec
 				return nil
 			},
+			// orphan CRDs to prevent deleting end user data
 			DeletionPolicy: resources.Orphan,
 			StatusFunc:     resources.SimpleStatus,
 		})

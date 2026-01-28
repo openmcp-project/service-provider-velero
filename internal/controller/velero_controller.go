@@ -98,10 +98,11 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	if images == nil {
 		return nil, errors.New("requested version is not available")
 	}
-	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster.Client(), clusters.WorkloadCluster.RESTConfig(), "velero")
-	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster.Client(), clusters.MCPCluster.RESTConfig(), "velero")
+	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster.Client(), clusters.WorkloadCluster.RESTConfig(), "velero", resources.WorkloadCluter)
+	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster.Client(), clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
 	// ### MCP RESOURCES ###
-	namespace.Configure(mcpCluster)
+	// deletion policy orphan to prevent deleting end user data that we are not aware of
+	namespace.Configure(mcpCluster, resources.Orphan)
 	// service account
 	mcpServiceAccount := &authn.ManagedServiceAccount{
 		NamespacedName: types.NamespacedName{
@@ -122,7 +123,7 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	// create velero namespace
 	// TODO create separate tenant namespace where each has its own velero instance
 	// TODO link onboarding api object and managed resources with additional instance status/label/annotation
-	namespace.Configure(workloadCluster)
+	namespace.Configure(workloadCluster, resources.Delete)
 	// sync image pull secrets to workload cluster
 	secretManager := imagepullsecrets.ManagedPullSecret{
 		PlatformCluster: clusters.PlatformCluster,
@@ -130,7 +131,7 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	}
 	secretManager.Configure(workloadCluster, "velero", *pc)
 	// server deployment
-	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, images, tokenFunc)
+	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, *pc, images, tokenFunc)
 
 	// manager
 	mgr := resources.NewManager()
@@ -143,15 +144,16 @@ func resultsToResources(results []resources.Result) []apiv1alpha1.ManagedResourc
 	resources := []apiv1alpha1.ManagedResource{}
 	for _, res := range results {
 		obj := res.Object.GetObject()
-		status := res.Object.GetStatus()
+		status := res.Object.GetStatus(apiv1alpha1.ResourceLocation(res.Cluster.GetClusterType()))
 		resources = append(resources, apiv1alpha1.ManagedResource{
 			TypedObjectReference: corev1.TypedObjectReference{
 				Kind:      reflect.TypeOf(obj).Elem().Name(),
 				Name:      obj.GetName(),
 				Namespace: nilIfEmptyString(obj.GetNamespace()),
 			},
-			Phase:   status.Phase,
-			Message: status.Message,
+			Phase:    status.Phase,
+			Message:  status.Message,
+			Location: status.Location,
 		})
 	}
 	return resources

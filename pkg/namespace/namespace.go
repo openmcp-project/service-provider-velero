@@ -6,14 +6,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func Configure(cluster resources.ManagedCluster) {
+func Configure(cluster resources.ManagedCluster, deletionPolicy resources.DeletionPolicy) {
 	ns := resources.NewManagedObject(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cluster.GetDefaultNamespace(),
 		},
 	}, resources.ManagedObjectContext{
 		ReconcileFunc:  resources.NoOp,
-		DeletionPolicy: resources.Orphan,
+		DeletionPolicy: deletionPolicy,
 		StatusFunc:     resources.SimpleStatus,
 	})
 	cluster.AddObject(ns)

@@ -3,6 +3,7 @@ package deployment
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
@@ -21,7 +22,7 @@ func getPodLabels(instance *v1alpha1.Velero) map[string]string {
 	}
 }
 
-func Configure(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
+func Configure(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero, pc v1alpha1.ProviderConfig, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "velero",
@@ -51,6 +52,7 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 					Spec: corev1.PodSpec{
 						RestartPolicy:                 corev1.RestartPolicyAlways,
 						TerminationGracePeriodSeconds: ptr.To[int64](10),
+						ImagePullSecrets:              slices.Clone(pc.Spec.ImagePullSecrets),
 						Containers: []corev1.Container{
 							{
 								Name:            "velero",
@@ -119,12 +121,13 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 			tokenApplyFunc(&oDeploy.Spec.Template.Spec)
 			return nil
 		},
-		StatusFunc: func(o client.Object) resources.Status {
+		StatusFunc: func(o client.Object, rl v1alpha1.ResourceLocation) resources.Status {
 			deploy := o.(*appsv1.Deployment)
 			if !deploy.DeletionTimestamp.IsZero() {
 				return resources.Status{
-					Phase:   v1alpha1.Terminating,
-					Message: "Deployment is terminating.",
+					Phase:    v1alpha1.Terminating,
+					Message:  "Deployment is terminating.",
+					Location: rl,
 				}
 			}
 
@@ -133,13 +136,15 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 
 			if desired != ready {
 				return resources.Status{
-					Phase:   v1alpha1.Progressing,
-					Message: "Waiting for all pods to become ready.",
+					Phase:    v1alpha1.Progressing,
+					Message:  "Waiting for all pods to become ready.",
+					Location: rl,
 				}
 			}
 			return resources.Status{
-				Phase:   v1alpha1.Ready,
-				Message: "All pods are ready.",
+				Phase:    v1alpha1.Ready,
+				Message:  "All pods are ready.",
+				Location: rl,
 			}
 		},
 	})
@@ -185,25 +190,28 @@ func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string,
 			}
 			return nil
 		},
-		StatusFunc: func(o client.Object) resources.Status {
+		StatusFunc: func(o client.Object, rl v1alpha1.ResourceLocation) resources.Status {
 			deploy := o.(*appsv1.Deployment)
 			if !deploy.DeletionTimestamp.IsZero() {
 				return resources.Status{
-					Phase:   v1alpha1.Terminating,
-					Message: "Deployment is terminating.",
+					Phase:    v1alpha1.Terminating,
+					Message:  "Deployment is terminating.",
+					Location: rl,
 				}
 			}
 			desired := ptr.Deref(deploy.Spec.Replicas, 1)
 			ready := deploy.Status.ReadyReplicas
 			if desired != ready {
 				return resources.Status{
-					Phase:   v1alpha1.Progressing,
-					Message: "Waiting for all pods to become ready.",
+					Phase:    v1alpha1.Progressing,
+					Message:  "Waiting for all pods to become ready.",
+					Location: rl,
 				}
 			}
 			return resources.Status{
-				Phase:   v1alpha1.Ready,
-				Message: "All pods are ready.",
+				Phase:    v1alpha1.Ready,
+				Message:  "All pods are ready.",
+				Location: rl,
 			}
 		},
 	})
