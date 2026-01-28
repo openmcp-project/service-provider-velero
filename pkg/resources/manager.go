@@ -22,14 +22,16 @@ type MutateFn func(o client.Object) error
 
 type dependents map[ManagedObject][]dependency
 
-func NewManager() *Manager {
+func NewManager(instanceID string) *Manager {
 	return &Manager{
-		clusters: []ManagedCluster{},
+		instanceID: instanceID,
+		clusters:   []ManagedCluster{},
 	}
 }
 
 type Manager struct {
-	clusters []ManagedCluster
+	instanceID string
+	clusters   []ManagedCluster
 }
 
 func (m *Manager) AddCluster(mc ManagedCluster) {
@@ -100,6 +102,7 @@ func (m *Manager) reconcileObject(ctx context.Context, mc ManagedCluster, mo Man
 	} else {
 		opResult, err := controllerutil.CreateOrUpdate(ctx, client, obj, func() error {
 			meta.SetManagedBy(obj)
+			meta.SetInstanceID(obj, m.instanceID)
 			return mo.Reconcile(ctx)
 		})
 		return Result{

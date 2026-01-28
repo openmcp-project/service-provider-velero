@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -29,12 +30,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
+	"github.com/openmcp-project/controller-utils/pkg/clusters"
+
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/authz"
 	"github.com/openmcp-project/service-provider-velero/pkg/crds"
 	"github.com/openmcp-project/service-provider-velero/pkg/deployment"
 	"github.com/openmcp-project/service-provider-velero/pkg/imagepullsecrets"
+	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
@@ -43,6 +47,7 @@ import (
 
 // VeleroReconciler reconciles a Velero object
 type VeleroReconciler struct {
+	OnboardingCluster *clusters.Cluster
 	// PodNamespace is the namespace the service provider pod runs in
 	// e.g. required to resolve image pull secret references from the provider config
 	PodNamespace string
@@ -52,6 +57,10 @@ type VeleroReconciler struct {
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+	err := r.ensureInstanceID(ctx, obj)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	mgr, err := r.configResources(obj, pc, clusters)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -98,7 +107,7 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	if images == nil {
 		return nil, errors.New("requested version is not available")
 	}
-	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster.Client(), clusters.WorkloadCluster.RESTConfig(), "velero", resources.WorkloadCluter)
+	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster.Client(), clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluter)
 	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster.Client(), clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
 	// ### MCP RESOURCES ###
 	// deletion policy orphan to prevent deleting end user data that we are not aware of
@@ -121,7 +130,6 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 
 	// ### WORKLOAD RESOURCES ###
 	// create velero namespace
-	// TODO create separate tenant namespace where each has its own velero instance
 	// TODO link onboarding api object and managed resources with additional instance status/label/annotation
 	namespace.Configure(workloadCluster, resources.Delete)
 	// sync image pull secrets to workload cluster
@@ -129,12 +137,12 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 		PlatformCluster: clusters.PlatformCluster,
 		SourceNamespace: r.PodNamespace,
 	}
-	secretManager.Configure(workloadCluster, "velero", *pc)
+	secretManager.Configure(workloadCluster, *pc)
 	// server deployment
 	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, *pc, images, tokenFunc)
 
 	// manager
-	mgr := resources.NewManager()
+	mgr := resources.NewManager(instance.GetID(obj))
 	mgr.AddCluster(mcpCluster)
 	mgr.AddCluster(workloadCluster)
 	return mgr, nil
@@ -208,4 +216,15 @@ func resolveImage(name string, version string, pc apiv1alpha1.ProviderConfig) st
 		}
 	}
 	return ""
+}
+
+// sets an instance id that is used to label every managed resource and create an instance namespace on the workload cluster
+func (r *VeleroReconciler) ensureInstanceID(ctx context.Context, obj *apiv1alpha1.Velero) error {
+	if len(instance.GetID(obj)) == 0 {
+		instance.SetID(obj, instance.GenerateID(obj))
+		if err := r.OnboardingCluster.Client().Update(ctx, obj); err != nil {
+			return fmt.Errorf("failed to set instance id of velero resource %s/%s: %w", obj.Namespace, obj.Name, err)
+		}
+	}
+	return nil
 }

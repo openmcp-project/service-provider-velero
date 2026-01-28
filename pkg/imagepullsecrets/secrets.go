@@ -20,12 +20,12 @@ type ManagedPullSecret struct {
 }
 
 // adds every pull secret defined in the provider config to the namespace of the velero instance in the workload cluster
-func (mps ManagedPullSecret) Configure(workloadCluster resources.ManagedCluster, workloadNamespace string, providerConfig v1alpha1.ProviderConfig) {
+func (mps ManagedPullSecret) Configure(workloadCluster resources.ManagedCluster, providerConfig v1alpha1.ProviderConfig) {
 	for _, pullSecret := range providerConfig.Spec.ImagePullSecrets {
 		secret := resources.NewManagedObject(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pullSecret.Name,
-				Namespace: workloadNamespace,
+				Namespace: workloadCluster.GetDefaultNamespace(),
 			},
 		}, resources.ManagedObjectContext{
 			ReconcileFunc: func(ctx context.Context, o client.Object) error {
@@ -41,7 +41,7 @@ func (mps ManagedPullSecret) Configure(workloadCluster resources.ManagedCluster,
 				if err := mps.PlatformCluster.Client().Get(ctx, client.ObjectKeyFromObject(sourceSecret), sourceSecret); err != nil {
 					return err
 				}
-				mutator := openmcpresources.NewSecretMutator(pullSecret.Name, workloadNamespace, sourceSecret.Data, corev1.SecretTypeDockerConfigJson)
+				mutator := openmcpresources.NewSecretMutator(pullSecret.Name, workloadCluster.GetDefaultNamespace(), sourceSecret.Data, corev1.SecretTypeDockerConfigJson)
 				return mutator.Mutate(oSecret)
 			},
 			StatusFunc: resources.SimpleStatus,

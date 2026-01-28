@@ -315,7 +315,8 @@ func main() {
 		WithPlatformCluster(platformCluster).
 		WithOnboardingCluster(onboardingCluster).
 		WithServiceProviderReconciler(&controller.VeleroReconciler{
-			PodNamespace: podNamespace,
+			OnboardingCluster: onboardingCluster,
+			PodNamespace:      podNamespace,
 		}).
 		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
