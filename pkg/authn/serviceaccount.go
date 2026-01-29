@@ -21,6 +21,8 @@ import (
 const (
 	serviceAccountMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
 	serviceAccountVolume    = "kube-api-access"
+
+	annotationTokenExpirationTime = "velero.services.openmcp.cloud/token-expiration-time"
 )
 
 var (
@@ -94,7 +96,7 @@ func (m *ManagedServiceAccount) kubeAPIAccess() string {
 }
 
 // TODO optional image pull secret defined through providerconfig to enable pull from private registries
-func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.ManagedCluster) TokenApplyFunc {
+func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.ManagedCluster, pollInterval time.Duration) TokenApplyFunc {
 	// Add a service account on the remote cluster.
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -121,15 +123,25 @@ func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.
 		ReconcileFunc: func(ctx context.Context, o client.Object) error {
 			oSecret := o.(*corev1.Secret)
 
-			rc, err := generateToken(ctx, remoteCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
-			if err != nil {
-				return err
-			}
-
-			oSecret.Data = map[string][]byte{
-				"token":     []byte(rc.Token),
-				"namespace": []byte(remoteCluster.GetDefaultNamespace()),
-				"ca.crt":    []byte(rc.CAData),
+			// prevent token generation on every reconcile but at the same time consider the
+			// provider config poll interval and an additional safeguard of a minute (pod volume refresh delay)
+			// to make sure that the token is always refreshed in time.
+			// e.g. a user might not the update velero onboarding resource after its initial creation but
+			// the service still needs to refresh its token at least once per hour or more frequently
+			// in case the token is issued with an expiration time of less than an hour
+			nextReconcile := time.Now().Add(pollInterval).Add(time.Minute)
+			expirationTime, err := getTokenExpirationTime(oSecret)
+			if err != nil || expirationTime.Before(nextReconcile) {
+				rc, err := generateToken(ctx, remoteCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
+				if err != nil {
+					return err
+				}
+				oSecret.Data = map[string][]byte{
+					"token":     []byte(rc.Token),
+					"namespace": []byte(remoteCluster.GetDefaultNamespace()),
+					"ca.crt":    []byte(rc.CAData),
+				}
+				setTokenExpirationTime(oSecret, rc.TokenExpiry)
 			}
 
 			return nil
@@ -208,4 +220,19 @@ func applyToContainer(c *corev1.Container, remoteCluster resources.ManagedCluste
 		Name:  "KUBERNETES_SERVICE_PORT",
 		Value: remotePort,
 	})
+}
+
+func getTokenExpirationTime(obj *corev1.Secret) (time.Time, error) {
+	if obj.Annotations == nil {
+		return time.Time{}, errors.New("no expiration time set")
+	}
+	expirationTime := obj.Annotations[annotationTokenExpirationTime]
+	return time.Parse(time.RFC3339, expirationTime)
+}
+
+func setTokenExpirationTime(obj *corev1.Secret, expTime time.Time) {
+	if obj.Annotations == nil {
+		obj.Annotations = map[string]string{}
+	}
+	obj.Annotations[annotationTokenExpirationTime] = expTime.Format(time.RFC3339)
 }

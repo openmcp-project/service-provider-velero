@@ -119,7 +119,7 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 			Namespace: mcpCluster.GetDefaultNamespace(),
 		},
 	}
-	tokenFunc := mcpServiceAccount.Configure(workloadCluster, mcpCluster)
+	tokenFunc := mcpServiceAccount.Configure(workloadCluster, mcpCluster, pc.PollInterval())
 	if err := crds.Configure(mcpCluster); err != nil {
 		return nil, err
 	}
