@@ -22,7 +22,7 @@ func getPodLabels(instance *v1alpha1.Velero) map[string]string {
 	}
 }
 
-func Configure(cluster resources.ManagedCluster, namespace string, velero *v1alpha1.Velero, pc v1alpha1.ProviderConfig, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
+func Configure(cluster resources.ManagedCluster, namespace string, velero *v1alpha1.Velero, pc *v1alpha1.ProviderConfig, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "velero",

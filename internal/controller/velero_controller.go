@@ -131,16 +131,11 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 
 	// ### WORKLOAD RESOURCES ###
 	// create velero namespace
-	// TODO link onboarding api object and managed resources with additional instance status/label/annotation
 	namespace.Configure(workloadCluster, resources.Delete)
 	// sync image pull secrets to workload cluster
-	secretManager := secret.ManagedImagePullSecret{
-		PlatformCluster: r.PlatformCluster,
-		SourceNamespace: r.PodNamespace,
-	}
-	secretManager.Configure(workloadCluster, *pc)
+	secret.Configure(workloadCluster, r.PlatformCluster, pc.Spec.ImagePullSecrets, r.PodNamespace)
 	// server deployment
-	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, *pc, images, tokenFunc)
+	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, pc, images, tokenFunc)
 
 	// manager
 	mgr := resources.NewManager(instance.GetID(obj))
