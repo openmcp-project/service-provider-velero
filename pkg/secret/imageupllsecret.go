@@ -1,4 +1,4 @@
-package imagepullsecrets
+package secret
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type ManagedPullSecret struct {
+type ManagedImagePullSecret struct {
 	// PlatformCluster is the cluster the service provider runs in
 	PlatformCluster *clusters.Cluster
 	// SourceNamespace defines the origin namespace of the secret in the platform cluster
@@ -20,12 +20,12 @@ type ManagedPullSecret struct {
 }
 
 // adds every pull secret defined in the provider config to the namespace of the velero instance in the workload cluster
-func (mps ManagedPullSecret) Configure(workloadCluster resources.ManagedCluster, providerConfig v1alpha1.ProviderConfig) {
+func (mips ManagedImagePullSecret) Configure(cluster resources.ManagedCluster, providerConfig v1alpha1.ProviderConfig) {
 	for _, pullSecret := range providerConfig.Spec.ImagePullSecrets {
 		secret := resources.NewManagedObject(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pullSecret.Name,
-				Namespace: workloadCluster.GetDefaultNamespace(),
+				Namespace: cluster.GetDefaultNamespace(),
 			},
 		}, resources.ManagedObjectContext{
 			ReconcileFunc: func(ctx context.Context, o client.Object) error {
@@ -34,19 +34,18 @@ func (mps ManagedPullSecret) Configure(workloadCluster resources.ManagedCluster,
 				sourceSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      pullSecret.Name,
-						Namespace: mps.SourceNamespace,
+						Namespace: mips.SourceNamespace,
 					},
 				}
 				// retrieve source secret from platform cluster
-				if err := mps.PlatformCluster.Client().Get(ctx, client.ObjectKeyFromObject(sourceSecret), sourceSecret); err != nil {
+				if err := mips.PlatformCluster.Client().Get(ctx, client.ObjectKeyFromObject(sourceSecret), sourceSecret); err != nil {
 					return err
 				}
-				mutator := openmcpresources.NewSecretMutator(pullSecret.Name, workloadCluster.GetDefaultNamespace(), sourceSecret.Data, corev1.SecretTypeDockerConfigJson)
+				mutator := openmcpresources.NewSecretMutator(pullSecret.Name, cluster.GetDefaultNamespace(), sourceSecret.Data, corev1.SecretTypeDockerConfigJson)
 				return mutator.Mutate(oSecret)
 			},
 			StatusFunc: resources.SimpleStatus,
 		})
-		workloadCluster.AddObject(secret)
+		cluster.AddObject(secret)
 	}
-
 }

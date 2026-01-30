@@ -14,7 +14,7 @@ const (
 	ClusterRoleBindingName = "velero-server"
 )
 
-func Configure(remoteCluster resources.ManagedCluster, msa *authn.ManagedServiceAccount) {
+func Configure(cluster resources.ManagedCluster, msa *authn.ManagedServiceAccount) {
 	crb := resources.NewManagedObject(&rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ClusterRoleBindingName,
@@ -38,5 +38,5 @@ func Configure(remoteCluster resources.ManagedCluster, msa *authn.ManagedService
 		},
 		StatusFunc: resources.SimpleStatus,
 	})
-	remoteCluster.AddObject(crb)
+	cluster.AddObject(crb)
 }

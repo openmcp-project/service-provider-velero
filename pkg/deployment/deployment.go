@@ -22,11 +22,11 @@ func getPodLabels(instance *v1alpha1.Velero) map[string]string {
 	}
 }
 
-func Configure(localCluster resources.ManagedCluster, remoteNamespace string, velero *v1alpha1.Velero, pc v1alpha1.ProviderConfig, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
+func Configure(cluster resources.ManagedCluster, namespace string, velero *v1alpha1.Velero, pc v1alpha1.ProviderConfig, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "velero",
-			Namespace: localCluster.GetDefaultNamespace(),
+			Namespace: cluster.GetDefaultNamespace(),
 		},
 	}, resources.ManagedObjectContext{
 		ReconcileFunc: func(ctx context.Context, o client.Object) error {
@@ -67,7 +67,7 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 									},
 									{
 										Name:  "VELERO_NAMESPACE",
-										Value: remoteNamespace,
+										Value: namespace,
 									},
 									{
 										Name:  "LD_LIBRARY_PATH",
@@ -148,16 +148,16 @@ func Configure(localCluster resources.ManagedCluster, remoteNamespace string, ve
 			}
 		},
 	})
-	localCluster.AddObject(deployment)
+	cluster.AddObject(deployment)
 }
 
-func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string, image string, velero *v1alpha1.Velero) {
+func ConfigureMcp(cluster resources.ManagedCluster, namespace string, image string, velero *v1alpha1.Velero) {
 	// workaround for velero expecting a deployment called 'velero' on the same cluster it watches its API/CRDs
 	// we deploy a 0 scale deployment on the mcp
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "velero",
-			Namespace: localCluster.GetDefaultNamespace(),
+			Namespace: cluster.GetDefaultNamespace(),
 		},
 	}, resources.ManagedObjectContext{
 		ReconcileFunc: func(ctx context.Context, o client.Object) error {
@@ -215,5 +215,5 @@ func ConfigureMcp(localCluster resources.ManagedCluster, remoteNamespace string,
 			}
 		},
 	})
-	localCluster.AddObject(deployment)
+	cluster.AddObject(deployment)
 }

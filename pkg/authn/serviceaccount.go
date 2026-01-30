@@ -96,7 +96,7 @@ func (m *ManagedServiceAccount) kubeAPIAccess() string {
 }
 
 // TODO optional image pull secret defined through providerconfig to enable pull from private registries
-func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.ManagedCluster, pollInterval time.Duration) TokenApplyFunc {
+func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.ManagedCluster, pollInterval time.Duration) TokenApplyFunc {
 	// Add a service account on the remote cluster.
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -108,13 +108,13 @@ func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.
 		ReconcileFunc: resources.NoOp,
 		StatusFunc:    resources.SimpleStatus,
 	})
-	remoteCluster.AddObject(msa)
+	mcpCluster.AddObject(msa)
 
 	// Add a secret on the local cluster that contains a token for the remote service account.
 	secret := resources.NewManagedObject(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.kubeAPIAccess(),
-			Namespace: localCluster.GetDefaultNamespace(),
+			Namespace: workloadCluster.GetDefaultNamespace(),
 		},
 	}, resources.ManagedObjectContext{
 		DependsOn: []resources.ManagedObject{
@@ -132,13 +132,13 @@ func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.
 			nextReconcile := time.Now().Add(pollInterval).Add(time.Minute)
 			expirationTime, err := getTokenExpirationTime(oSecret)
 			if err != nil || expirationTime.Before(nextReconcile) {
-				rc, err := generateToken(ctx, remoteCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
+				rc, err := generateToken(ctx, mcpCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
 				if err != nil {
 					return err
 				}
 				oSecret.Data = map[string][]byte{
 					"token":     []byte(rc.Token),
-					"namespace": []byte(remoteCluster.GetDefaultNamespace()),
+					"namespace": []byte(mcpCluster.GetDefaultNamespace()),
 					"ca.crt":    []byte(rc.CAData),
 				}
 				setTokenExpirationTime(oSecret, rc.TokenExpiry)
@@ -148,7 +148,7 @@ func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.
 		},
 		StatusFunc: resources.SimpleStatus,
 	})
-	localCluster.AddObject(secret)
+	workloadCluster.AddObject(secret)
 
 	// Return a function that can be used to mount the service account token into a pod.
 	return func(ps *corev1.PodSpec) {
@@ -163,10 +163,10 @@ func (m *ManagedServiceAccount) Configure(localCluster, remoteCluster resources.
 		})
 
 		for i := range ps.Containers {
-			applyToContainer(&ps.Containers[i], remoteCluster)
+			applyToContainer(&ps.Containers[i], mcpCluster)
 		}
 		for i := range ps.InitContainers {
-			applyToContainer(&ps.InitContainers[i], remoteCluster)
+			applyToContainer(&ps.InitContainers[i], mcpCluster)
 		}
 	}
 }

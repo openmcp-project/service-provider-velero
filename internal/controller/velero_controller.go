@@ -37,17 +37,18 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/authz"
 	"github.com/openmcp-project/service-provider-velero/pkg/crds"
 	"github.com/openmcp-project/service-provider-velero/pkg/deployment"
-	"github.com/openmcp-project/service-provider-velero/pkg/imagepullsecrets"
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
+	"github.com/openmcp-project/service-provider-velero/pkg/secret"
 	"github.com/openmcp-project/service-provider-velero/pkg/utils"
 )
 
 // VeleroReconciler reconciles a Velero object
 type VeleroReconciler struct {
 	OnboardingCluster *clusters.Cluster
+	PlatformCluster   *clusters.Cluster
 	// PodNamespace is the namespace the service provider pod runs in
 	// e.g. required to resolve image pull secret references from the provider config
 	PodNamespace string
@@ -133,8 +134,8 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	// TODO link onboarding api object and managed resources with additional instance status/label/annotation
 	namespace.Configure(workloadCluster, resources.Delete)
 	// sync image pull secrets to workload cluster
-	secretManager := imagepullsecrets.ManagedPullSecret{
-		PlatformCluster: clusters.PlatformCluster,
+	secretManager := secret.ManagedImagePullSecret{
+		PlatformCluster: r.PlatformCluster,
 		SourceNamespace: r.PodNamespace,
 	}
 	secretManager.Configure(workloadCluster, *pc)

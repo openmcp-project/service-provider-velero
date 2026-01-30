@@ -30,11 +30,12 @@ type ServiceProviderReconciler[T ServiceProviderAPI, PC ProviderConfig] interfac
 	Delete(ctx context.Context, obj T, pc PC, clusters ClusterContext) (ctrl.Result, error)
 }
 
-// ClusterContext provides access to any potential target cluster
+// ClusterContext provides access to request specific clusters.
+// Request specific clusters are the managed control plane and workload clusters that are tied to a reconcile request.
+// Versus static clusters like the platform and onboarding cluster that can be assigned to a reconciler at initialization.
 type ClusterContext struct {
 	MCPCluster      *clusters.Cluster
 	WorkloadCluster *clusters.Cluster
-	PlatformCluster *clusters.Cluster
 }
 
 // ServiceProviderAPI represents an onboarding api type
@@ -286,7 +287,6 @@ func (r *SPReconciler[T, PC]) clusters(ctx context.Context, req ctrl.Request) (C
 	}
 	return ClusterContext{
 		MCPCluster:      mcp,
-		PlatformCluster: r.platformCluster,
 		WorkloadCluster: workloadCluster,
 	}, res, nil
 }
