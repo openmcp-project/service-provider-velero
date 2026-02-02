@@ -30,9 +30,12 @@ type ServiceProviderReconciler[T ServiceProviderAPI, PC ProviderConfig] interfac
 	Delete(ctx context.Context, obj T, pc PC, clusters ClusterContext) (ctrl.Result, error)
 }
 
-// ClusterContext provides access to request specific clusters.
-// Request specific clusters are the managed control plane and workload clusters that are tied to a reconcile request.
-// Versus static clusters like the platform and onboarding cluster that can be assigned to a reconciler at initialization.
+// ClusterContext provides access to request-scoped clusters.
+// These clusters include the managed control plane and workload clusters associated with a specific reconcile request.
+// (Static clusters like the platform and onboarding clusters are provided to the reconciler when it is initialized.)
+//
+// More info on the deployment model:
+// https://openmcp-project.github.io/docs/about/design/service-provider#deployment-model
 type ClusterContext struct {
 	MCPCluster      *clusters.Cluster
 	WorkloadCluster *clusters.Cluster
@@ -77,27 +80,32 @@ type SPReconciler[T ServiceProviderAPI, PC ProviderConfig] struct {
 	emptyObj                  func() T
 }
 
-func NewSPReconciler[T ServiceProviderAPI, PC ProviderConfig](emptyApiObj func() T) *SPReconciler[T, PC] {
+// NewSPReconciler creates a reconciler instance for the given types.
+func NewSPReconciler[T ServiceProviderAPI, PC ProviderConfig](emptyObj func() T) *SPReconciler[T, PC] {
 	return &SPReconciler[T, PC]{
-		emptyObj: emptyApiObj,
+		emptyObj: emptyObj,
 	}
 }
 
+// WithPlatformCluster set the platform cluster.
 func (r *SPReconciler[T, PC]) WithPlatformCluster(c *clusters.Cluster) *SPReconciler[T, PC] {
 	r.platformCluster = c
 	return r
 }
 
+// WithOnboardingCluster set the onboarding cluster.
 func (r *SPReconciler[T, PC]) WithOnboardingCluster(c *clusters.Cluster) *SPReconciler[T, PC] {
 	r.onboardingCluster = c
 	return r
 }
 
+// WithClusterAccessReconciler sets the cluster access reconciler.
 func (r *SPReconciler[T, PC]) WithClusterAccessReconciler(car clusteraccess.Reconciler) *SPReconciler[T, PC] {
 	r.clusterAccessReconciler = car
 	return r
 }
 
+// WithServiceProviderReconciler sets the service provider reconciler.
 func (r *SPReconciler[T, PC]) WithServiceProviderReconciler(dsr ServiceProviderReconciler[T, PC]) *SPReconciler[T, PC] {
 	r.serviceProviderReconciler = dsr
 	return r
@@ -143,11 +151,11 @@ func (r *SPReconciler[T, PC]) Reconcile(ctx context.Context, req ctrl.Request) (
 	}, nil
 }
 
-func (r *SPReconciler[T, PC]) updateStatus(ctx context.Context, new T, old T) {
-	if equality.Semantic.DeepEqual(old.GetStatus(), new.GetStatus()) {
+func (r *SPReconciler[T, PC]) updateStatus(ctx context.Context, newObj T, oldObj T) {
+	if equality.Semantic.DeepEqual(oldObj.GetStatus(), newObj.GetStatus()) {
 		return
 	}
-	if err := r.onboardingCluster.Client().Status().Patch(ctx, new, client.MergeFrom(old)); err != nil {
+	if err := r.onboardingCluster.Client().Status().Patch(ctx, newObj, client.MergeFrom(oldObj)); err != nil {
 		l := logf.FromContext(ctx)
 		l.Error(err, "Patch status failed")
 	}
@@ -249,23 +257,22 @@ func (r *SPReconciler[T, PC]) createOrUpdate(ctx context.Context, obj T, pc PC) 
 
 // areAccessRequestsInDeletion determines if the access requests for a reconcile request are in deletion.
 // It returns true if at least one of the access requests (mcp, workload) is deleted or has a deletion timestamp.
+// It is used to prevent renewing cluster access when deleting an ServiceProviderAPI object.
 func (r *SPReconciler[T, PC]) areAccessRequestsInDeletion(ctx context.Context, req ctrl.Request) (bool, error) {
 	accessRequest, err := r.clusterAccessReconciler.MCPAccessRequest(ctx, req)
-	if apierrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) || accessRequest.DeletionTimestamp != nil {
 		return true, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return false, err
-	} else if accessRequest.DeletionTimestamp != nil {
-		return true, nil
 	}
 
 	accessRequest, err = r.clusterAccessReconciler.WorkloadAccessRequest(ctx, req)
-	if apierrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) || accessRequest.DeletionTimestamp != nil {
 		return true, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return false, err
-	} else if accessRequest.DeletionTimestamp != nil {
-		return true, nil
 	}
 
 	return false, nil
@@ -303,8 +310,8 @@ func (r *SPReconciler[T, PC]) SetupWithManager(mgr ctrl.Manager, name string, pr
 					func(ctx context.Context, obj client.Object) []reconcile.Request {
 						// update cached provider config
 						if obj != nil {
-							copy := obj.DeepCopyObject().(PC)
-							r.providerConfig.Store(&copy)
+							c := obj.DeepCopyObject().(PC)
+							r.providerConfig.Store(&c)
 						} else {
 							r.providerConfig.Store(nil)
 						}

@@ -39,18 +39,19 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/deployment"
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
+	"github.com/openmcp-project/service-provider-velero/pkg/objectutils"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
 	"github.com/openmcp-project/service-provider-velero/pkg/secret"
-	"github.com/openmcp-project/service-provider-velero/pkg/utils"
 )
 
 // VeleroReconciler reconciles a Velero object
 type VeleroReconciler struct {
+	// OnboardingCluster is the cluster where this controller watches Velero resources and reacts to their changes.
 	OnboardingCluster *clusters.Cluster
-	PlatformCluster   *clusters.Cluster
-	// PodNamespace is the namespace the service provider pod runs in
-	// e.g. required to resolve image pull secret references from the provider config
+	// PlatformCluster is the cluster where this controller is deployed and configured.
+	PlatformCluster *clusters.Cluster
+	// PodNamespace is the namespace where this controller is deployed in.
 	PodNamespace string
 }
 
@@ -69,7 +70,7 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 	results := mgr.Apply(ctx)
 	for _, r := range results {
 		if r.Error != nil {
-			l.Error(r.Error, utils.ObjectID(r.Object.GetObject()))
+			l.Error(r.Error, objectutils.ObjectID(r.Object.GetObject()))
 		}
 	}
 	managedResources := resultsToResources(results)
@@ -91,7 +92,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	results := mgr.Delete(ctx)
 	for _, r := range results {
 		if r.Error != nil {
-			l.Error(r.Error, utils.ObjectID(r.Object.GetObject()))
+			l.Error(r.Error, objectutils.ObjectID(r.Object.GetObject()))
 		}
 	}
 	if resources.AllDeleted(results) {
@@ -108,8 +109,8 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	if images == nil {
 		return nil, errors.New("requested version is not available")
 	}
-	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster.Client(), clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluter)
-	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster.Client(), clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
+	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster, clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluster)
+	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster, clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
 	// ### MCP RESOURCES ###
 	// deletion policy orphan to prevent deleting end user data that we are not aware of
 	namespace.Configure(mcpCluster, resources.Orphan)
@@ -127,7 +128,7 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	// creates ClusterRolebinding to ClusterRole cluster-admin for ServiceAccount 'velero-server'
 	authz.Configure(mcpCluster, mcpServiceAccount)
 	// create 'dummy' deployment
-	deployment.ConfigureMcp(mcpCluster, mcpCluster.GetDefaultNamespace(), images["velero"], obj)
+	deployment.ConfigureMcp(mcpCluster, images["velero"], instance.GetID(obj))
 
 	// ### WORKLOAD RESOURCES ###
 	// create velero namespace
@@ -135,7 +136,7 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	// sync image pull secrets to workload cluster
 	secret.Configure(workloadCluster, r.PlatformCluster, pc.Spec.ImagePullSecrets, r.PodNamespace)
 	// server deployment
-	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, pc, images, tokenFunc)
+	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, pc.Spec.ImagePullSecrets, images, tokenFunc)
 
 	// manager
 	mgr := resources.NewManager(instance.GetID(obj))

@@ -3,24 +3,25 @@ package authz
 import (
 	"context"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/authn"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openmcp-project/service-provider-velero/pkg/authn"
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
-const (
-	ClusterRoleBindingName = "velero-server"
-)
+const clusterRoleBindingName = "velero-server"
 
+// Configure adds a managed ClusterRoleBinding object to the given cluster.
+// The passed in service account is granted the cluster-admin role.
 func Configure(cluster resources.ManagedCluster, msa *authn.ManagedServiceAccount) {
 	crb := resources.NewManagedObject(&rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ClusterRoleBindingName,
+			Name: clusterRoleBindingName,
 		},
 	}, resources.ManagedObjectContext{
-		ReconcileFunc: func(ctx context.Context, o client.Object) error {
+		ReconcileFunc: func(_ context.Context, o client.Object) error {
 			oCRB := o.(*rbacv1.ClusterRoleBinding)
 			oCRB.Subjects = []rbacv1.Subject{
 				{

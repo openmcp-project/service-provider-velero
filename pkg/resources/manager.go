@@ -5,23 +5,26 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/meta"
-	"github.com/openmcp-project/service-provider-velero/pkg/utils"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/openmcp-project/service-provider-velero/pkg/meta"
+	"github.com/openmcp-project/service-provider-velero/pkg/objectutils"
 )
 
 const (
+	// OperationResultDeletionRequested indicates that an object has been marked for deletion
 	OperationResultDeletionRequested controllerutil.OperationResult = "deletionRequested"
-	OperationResultDeleted           controllerutil.OperationResult = "deleted"
-	OperationResultOrphaned          controllerutil.OperationResult = OperationResultDeleted
+	// OperationResultDeleted indicates that an object has been deleted
+	OperationResultDeleted controllerutil.OperationResult = "deleted"
+	// OperationResultOrphaned indicates that an object has been orphaned
+	OperationResultOrphaned controllerutil.OperationResult = OperationResultDeleted
 )
-
-type MutateFn func(o client.Object) error
 
 type dependents map[ManagedObject][]dependency
 
+// NewManager creates a new Manager instance.
 func NewManager(instanceID string) *Manager {
 	return &Manager{
 		instanceID: instanceID,
@@ -29,19 +32,23 @@ func NewManager(instanceID string) *Manager {
 	}
 }
 
+// Manager manages clusters and invokes reconciliation of ManagedObjects.
 type Manager struct {
 	instanceID string
 	clusters   []ManagedCluster
 }
 
+// AddCluster adds a cluster to a Manager.
 func (m *Manager) AddCluster(mc ManagedCluster) {
 	m.clusters = append(m.clusters, mc)
 }
 
+// Apply invokes reconciliation of all ManagedObjects.
 func (m *Manager) Apply(ctx context.Context) []Result {
 	return m.reconcileObjects(ctx, false)
 }
 
+// Delete invokes deletion of all ManagedObjects.
 func (m *Manager) Delete(ctx context.Context) []Result {
 	return m.reconcileObjects(ctx, true)
 }
@@ -99,18 +106,18 @@ func (m *Manager) reconcileObject(ctx context.Context, mc ManagedCluster, mo Man
 			OperationResult: OperationResultDeletionRequested,
 			Error:           err,
 		}
-	} else {
-		opResult, err := controllerutil.CreateOrUpdate(ctx, client, obj, func() error {
-			meta.SetManagedBy(obj)
-			meta.SetInstanceID(obj, m.instanceID)
-			return mo.Reconcile(ctx)
-		})
-		return Result{
-			Object:          mo,
-			Cluster:         mc,
-			OperationResult: opResult,
-			Error:           err,
-		}
+	}
+
+	opResult, err := controllerutil.CreateOrUpdate(ctx, client, obj, func() error {
+		meta.SetManagedBy(obj)
+		meta.SetInstanceID(obj, m.instanceID)
+		return mo.Reconcile(ctx)
+	})
+	return Result{
+		Object:          mo,
+		Cluster:         mc,
+		OperationResult: opResult,
+		Error:           err,
 	}
 }
 
@@ -130,7 +137,7 @@ func (m *Manager) checkForDependents(ctx context.Context, deps []dependency) err
 		}
 		// No error occurred, the GET request has been successful.
 		// The object still exists and depends on us.
-		errs = append(errs, fmt.Errorf("dependent object still exists: %s", utils.ObjectID(obj)))
+		errs = append(errs, fmt.Errorf("dependent object still exists: %s", objectutils.ObjectID(obj)))
 	}
 	return errors.Join(errs...)
 }
@@ -153,6 +160,7 @@ func (m *Manager) getDependents() dependents {
 	return deps
 }
 
+// Result summarizes a reconciliation result.
 type Result struct {
 	Object          ManagedObject
 	Cluster         ManagedCluster
@@ -165,6 +173,7 @@ type dependency struct {
 	Cluster ManagedCluster
 }
 
+// AllDeleted returns true if every item's operation result is OperationResultDeleted.
 func AllDeleted(results []Result) bool {
 	for _, r := range results {
 		if r.OperationResult != OperationResultDeleted {

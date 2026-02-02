@@ -3,20 +3,25 @@ package resources
 import (
 	"strings"
 
+	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
+	// ManagedControlPlane indicates that a cluster is a managed control plane.
 	ManagedControlPlane ClusterType = "ManagedControlPlane"
-	WorkloadCluter      ClusterType = "WorkloadCluster"
+	// WorkloadCluster indicates that a cluster is a workload cluster.
+	WorkloadCluster ClusterType = "WorkloadCluster"
 )
 
+// ClusterType distinguishes between managed control plane and workload clusters.
 type ClusterType string
 
-func NewManagedCluster(c client.Client, cfg *rest.Config, ns string, ct ClusterType) ManagedCluster {
+// NewManagedCluster creates a new ManagedCluster instance.
+func NewManagedCluster(c *clusters.Cluster, cfg *rest.Config, ns string, ct ClusterType) ManagedCluster {
 	return &managedCluster{
-		client:           c,
+		cluster:          c,
 		cfg:              cfg,
 		objects:          []ManagedObject{},
 		defaultNamespace: ns,
@@ -24,6 +29,7 @@ func NewManagedCluster(c client.Client, cfg *rest.Config, ns string, ct ClusterT
 	}
 }
 
+// ManagedCluster holds a set of ManagedObjects.
 type ManagedCluster interface {
 	AddObject(o ManagedObject)
 	GetObjects() []ManagedObject
@@ -31,13 +37,14 @@ type ManagedCluster interface {
 	GetHostAndPort() (string, string)
 	GetConfig() *rest.Config
 	GetClient() client.Client
+	GetCluster() *clusters.Cluster
 	GetClusterType() ClusterType
 }
 
 var _ ManagedCluster = &managedCluster{}
 
 type managedCluster struct {
-	client           client.Client
+	cluster          *clusters.Cluster
 	cfg              *rest.Config
 	objects          []ManagedObject
 	defaultNamespace string
@@ -46,7 +53,7 @@ type managedCluster struct {
 
 // GetClient implements ManagedCluster.
 func (m *managedCluster) GetClient() client.Client {
-	return m.client
+	return m.cluster.Client()
 }
 
 // GetConfig implements ManagedCluster.
@@ -77,6 +84,11 @@ func (m *managedCluster) AddObject(o ManagedObject) {
 // GetObjects implements ManagedCluster.
 func (m *managedCluster) GetObjects() []ManagedObject {
 	return m.objects
+}
+
+// GetCluster implements ManagedCluster.
+func (m *managedCluster) GetCluster() *clusters.Cluster {
+	return m.cluster
 }
 
 // GetClusterType implements ManagedCluster.

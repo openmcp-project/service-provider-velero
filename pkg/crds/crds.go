@@ -7,11 +7,12 @@ import (
 	"errors"
 	"io"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 var (
@@ -19,6 +20,7 @@ var (
 	crdsFile []byte
 )
 
+// Parse reads a set of embedded CRDs.
 func Parse() ([]*apiextv1.CustomResourceDefinition, error) {
 	crds := []*apiextv1.CustomResourceDefinition{}
 	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(crdsFile), 100)
@@ -41,6 +43,7 @@ func Parse() ([]*apiextv1.CustomResourceDefinition, error) {
 	}
 }
 
+// Configure adds a set of managed CRD objects to the given cluster.
 func Configure(cluster resources.ManagedCluster) error {
 	crds, err := Parse()
 	if err != nil {
@@ -53,7 +56,7 @@ func Configure(cluster resources.ManagedCluster) error {
 				Name: desired.Name,
 			},
 		}, resources.ManagedObjectContext{
-			ReconcileFunc: func(ctx context.Context, o client.Object) error {
+			ReconcileFunc: func(_ context.Context, o client.Object) error {
 				oCRD := o.(*apiextv1.CustomResourceDefinition)
 				oCRD.Spec = desired.Spec
 				return nil

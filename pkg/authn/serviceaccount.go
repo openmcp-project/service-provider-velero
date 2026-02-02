@@ -7,8 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	"github.com/openmcp-project/service-provider-velero/pkg/schemes"
+	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 const (
@@ -26,38 +27,34 @@ const (
 )
 
 var (
-	ErrSANameOrNamespaceEmpty = errors.New("name or namespace in service account reference must not be empty")
-	ErrRestConfigNil          = errors.New("rest config must not be nil")
-	ErrExpirationInvalid      = errors.New("must not specify a duration less than 10 minutes")
+	errSANameOrNamespaceEmpty = errors.New("name or namespace in service account reference must not be empty")
+	errRestConfigNil          = errors.New("rest config must not be nil")
+	errExpirationInvalid      = errors.New("must not specify a duration less than 10 minutes")
 )
 
-type ServiceAccountToken struct {
+type serviceAccountToken struct {
 	CAData      []byte
 	Token       string
 	TokenExpiry time.Time
 }
 
+// TokenApplyFunc injects the token to any container of the given PodSpec.
 type TokenApplyFunc func(ps *corev1.PodSpec)
 
 // generateToken generates a token for the given ServiceAccount. If successful, it returns the token and the actual lifetime of it, which might deviate from the desired lifetime.
-func generateToken(ctx context.Context, cfg *rest.Config, svcAccRef types.NamespacedName, expiration time.Duration) (*ServiceAccountToken, error) {
+func generateToken(ctx context.Context, mcp *clusters.Cluster, cfg *rest.Config, svcAccRef types.NamespacedName, expiration time.Duration) (*serviceAccountToken, error) {
 	if svcAccRef.Name == "" || svcAccRef.Namespace == "" {
-		return nil, ErrSANameOrNamespaceEmpty
+		return nil, errSANameOrNamespaceEmpty
 	}
 	if cfg == nil {
-		return nil, ErrRestConfigNil
+		return nil, errRestConfigNil
 	}
 	if expiration < 10*time.Minute {
-		return nil, ErrExpirationInvalid
-	}
-
-	client, err := client.New(cfg, client.Options{Scheme: schemes.Workload})
-	if err != nil {
-		return nil, err
+		return nil, errExpirationInvalid
 	}
 
 	sa := &corev1.ServiceAccount{}
-	if err := client.Get(ctx, types.NamespacedName{Name: svcAccRef.Name, Namespace: svcAccRef.Namespace}, sa); err != nil {
+	if err := mcp.Client().Get(ctx, types.NamespacedName{Name: svcAccRef.Name, Namespace: svcAccRef.Namespace}, sa); err != nil {
 		return nil, err
 	}
 
@@ -66,11 +63,11 @@ func generateToken(ctx context.Context, cfg *rest.Config, svcAccRef types.Namesp
 			ExpirationSeconds: ptr.To(int64(expiration.Seconds())),
 		},
 	}
-	if err := client.SubResource("token").Create(ctx, sa, req); err != nil {
+	if err := mcp.Client().SubResource("token").Create(ctx, sa, req); err != nil {
 		return nil, err
 	}
 
-	rc := &ServiceAccountToken{
+	rc := &serviceAccountToken{
 		Token:       req.Status.Token,
 		TokenExpiry: req.Status.ExpirationTimestamp.Time,
 		CAData:      cfg.CAData,
@@ -87,6 +84,7 @@ func generateToken(ctx context.Context, cfg *rest.Config, svcAccRef types.Namesp
 	return rc, nil
 }
 
+// ManagedServiceAccount references the managed ServiceAccount object
 type ManagedServiceAccount struct {
 	types.NamespacedName
 }
@@ -95,7 +93,7 @@ func (m *ManagedServiceAccount) kubeAPIAccess() string {
 	return fmt.Sprintf("kube-api-access-%s", m.Name)
 }
 
-// TODO optional image pull secret defined through providerconfig to enable pull from private registries
+// Configure adds a managed ServiceAccount object to the given MCP cluster and a managed Secret object to the given workload cluster.
 func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.ManagedCluster, pollInterval time.Duration) TokenApplyFunc {
 	// Add a service account on the remote cluster.
 	sa := &corev1.ServiceAccount{
@@ -132,14 +130,14 @@ func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.
 			nextReconcile := time.Now().Add(pollInterval).Add(time.Minute)
 			expirationTime, err := getTokenExpirationTime(oSecret)
 			if err != nil || expirationTime.Before(nextReconcile) {
-				rc, err := generateToken(ctx, mcpCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
+				rc, err := generateToken(ctx, mcpCluster.GetCluster(), mcpCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
 				if err != nil {
 					return err
 				}
 				oSecret.Data = map[string][]byte{
 					"token":     []byte(rc.Token),
 					"namespace": []byte(mcpCluster.GetDefaultNamespace()),
-					"ca.crt":    []byte(rc.CAData),
+					"ca.crt":    rc.CAData,
 				}
 				setTokenExpirationTime(oSecret, rc.TokenExpiry)
 			}

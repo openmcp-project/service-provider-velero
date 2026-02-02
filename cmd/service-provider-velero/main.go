@@ -219,6 +219,11 @@ func main() {
 		setupLog.Error(err, "Failed to initialize platform cluster")
 		os.Exit(1)
 	}
+	podNamespace := os.Getenv(openmcpconst.EnvVariablePodNamespace)
+	if podNamespace == "" {
+		setupLog.Error(fmt.Errorf("environment variable %s not set - cannot determine source namespace for secrets", openmcpconst.EnvVariablePodNamespace), "pod namespace missing")
+		os.Exit(1)
+	}
 	// TODO: define minimum set of permission required to run the init and run part of your service provider
 	adminPermissions := []clustersv1alpha1.PermissionsRequest{
 		{
@@ -301,11 +306,6 @@ func main() {
 	}
 	if err = mgr.Add(platformCluster.Cluster()); err != nil {
 		setupLog.Error(err, "unable to add platform cluster to manager")
-		os.Exit(1)
-	}
-	podNamespace := os.Getenv(openmcpconst.EnvVariablePodNamespace)
-	if podNamespace == "" {
-		setupLog.Error(fmt.Errorf("environment variable %s not set - cannot determine source namespace for secrets", openmcpconst.EnvVariablePodNamespace), "pod namespace missing")
 		os.Exit(1)
 	}
 	providerConfigUpdates := make(chan event.GenericEvent)

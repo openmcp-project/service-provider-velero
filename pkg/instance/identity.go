@@ -13,10 +13,12 @@ const (
 	base32EncodeStdLowerCase = "abcdefghijklmnopqrstuvwxyz234567"
 )
 
+// GetID returns the instance id of the Velero object.
 func GetID(o *v1alpha1.Velero) string {
 	return o.Labels[labelInstanceID]
 }
 
+// SetID sets the instance id of the Velero object.
 func SetID(o *v1alpha1.Velero, tenantID string) {
 	if o.Labels == nil {
 		o.Labels = map[string]string{}
@@ -24,13 +26,15 @@ func SetID(o *v1alpha1.Velero, tenantID string) {
 	o.Labels[labelInstanceID] = tenantID
 }
 
+// GenerateID generates a new instance id for the given Velero object.
 func GenerateID(o *v1alpha1.Velero) string {
 	h := sha1.New()
-	fmt.Fprintf(h, "%s/%s", o.Namespace, o.Name)
+	_, _ = fmt.Fprintf(h, "%s/%s", o.Namespace, o.Name)
 	id := base32.NewEncoding(base32EncodeStdLowerCase).WithPadding(base32.NoPadding).EncodeToString(h.Sum(nil))
 	return id
 }
 
+// Namespace prefixes the instance id of the Velero object to create a tenant namespace.
 func Namespace(o *v1alpha1.Velero) string {
 	return fmt.Sprintf("velero-%s", GetID(o))
 }

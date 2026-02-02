@@ -5,13 +5,14 @@ import (
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	openmcpresources "github.com/openmcp-project/controller-utils/pkg/resources"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
-// adds every pull secret defined in the provider config to the namespace of the velero instance in the workload cluster
+// Configure adds every pull secret defined in the provider config to the namespace of the velero instance in the workload cluster
 func Configure(cluster resources.ManagedCluster, platformCluster *clusters.Cluster, imagePullSecrets []corev1.LocalObjectReference, sourceNamespace string) {
 	for _, pullSecret := range imagePullSecrets {
 		secret := resources.NewManagedObject(&corev1.Secret{

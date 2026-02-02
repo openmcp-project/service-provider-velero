@@ -44,16 +44,20 @@ const (
 // VeleroSpec defines the desired state of Velero
 type VeleroSpec struct {
 	// The Velero version.
+	// +required
 	Version string `json:"version"`
 	// Plugins that should be installed.
-	Plugins []VeleroPlugin `json:"plugins"`
+	// +optional
+	Plugins []VeleroPlugin `json:"plugins,omitempty"`
 }
 
 // VeleroPlugin defines a velero plugin
 type VeleroPlugin struct {
 	// The Velero plugin name.
+	// +required
 	Name string `json:"name"`
 	// The Velero plugin version.
+	// +required
 	Version string `json:"version"`
 }
 
@@ -70,9 +74,12 @@ type VeleroStatus struct {
 type ManagedResource struct {
 	corev1.TypedObjectReference `json:",inline"`
 
-	Phase    InstancePhase    `json:"phase"`
-	Message  string           `json:"message"`
-	Location ResourceLocation `json:"location"`
+	// +required
+	Phase InstancePhase `json:"phase"`
+	// +optional
+	Message string `json:"message,omitempty"`
+	// +optional
+	Location ResourceLocation `json:"location,omitempty"`
 }
 
 // Velero is the Schema for the veleros API

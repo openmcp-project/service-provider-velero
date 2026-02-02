@@ -28,7 +28,7 @@ import (
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 )
 
-// ProviderConfigReconciler notifies the service provider about provider config updates
+// PCReconciler notifies the service provider about provider config updates
 // through a shared update channel. Any provider config change results in a reconcile request
 // for every existing service provider api object.
 type PCReconciler[T ProviderConfig] struct {
@@ -37,24 +37,26 @@ type PCReconciler[T ProviderConfig] struct {
 	emptyObj              func() T
 }
 
-func NewPCReconciler[T ProviderConfig](emptyApiObj func() T) *PCReconciler[T] {
+// NewPCReconciler creates a new provider PCReconciler instance.
+func NewPCReconciler[T ProviderConfig](emptyObj func() T) *PCReconciler[T] {
 	return &PCReconciler[T]{
-		emptyObj: emptyApiObj,
+		emptyObj: emptyObj,
 	}
 }
 
+// WithPlatformCluster sets the platform cluster.
 func (r *PCReconciler[T]) WithPlatformCluster(c *clusters.Cluster) *PCReconciler[T] {
 	r.platformCluster = c
 	return r
 }
 
+// WithUpdateChannel sets the channel to send config changes.
 func (r *PCReconciler[T]) WithUpdateChannel(c chan event.GenericEvent) *PCReconciler[T] {
 	r.providerUpdateChannel = c
 	return r
 }
 
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
+// Reconcile acts as a sender to notify receivers about provider config changes .
 func (r *PCReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	obj := r.emptyObj()
 	notify := event.GenericEvent{}
