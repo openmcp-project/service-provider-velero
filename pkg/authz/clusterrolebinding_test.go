@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
-	"github.com/openmcp-project/service-provider-velero/pkg/authn"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -17,6 +15,9 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/openmcp-project/service-provider-velero/pkg/authn"
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 func TestConfigure(t *testing.T) {
