@@ -50,7 +50,7 @@ func TestConfigure(t *testing.T) {
 			mgr.AddCluster(cluster)
 			result := mgr.Apply(context.TODO())
 
-			// expected result contains a service account on the mcp and a secret on the workload cluster
+			// expected result contains a cluster role binding
 			require.Len(t, result, 1)
 
 			// verify cluster role binding
