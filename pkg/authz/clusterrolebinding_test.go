@@ -4,27 +4,26 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
+	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
 func TestConfigure(t *testing.T) {
 	const testNamespace = "test"
 	tests := []struct {
-		name string
-		msa  *authn.ManagedServiceAccount
+		name string // description of this test case
+		// Named input parameters for target function.
+		msa        *authn.ManagedServiceAccount
+		cluster    resources.ManagedCluster
+		wantErrors []string
 	}{
 		{
 			name: "create cluster role binding to cluster-admin role",
@@ -34,34 +33,19 @@ func TestConfigure(t *testing.T) {
 					Name:      "msa",
 				},
 			},
+			cluster: resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, testNamespace, resources.WorkloadCluster),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			clientgoscheme.AddToScheme(scheme)
-
-			// init workload cluster with workload objects
-			mcpClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			cluster := resources.NewManagedCluster(clusters.NewTestClusterFromClient("client", mcpClient), &rest.Config{}, testNamespace, resources.WorkloadCluster)
-			Configure(cluster, tt.msa)
-
-			// invoke reconcile with manager
-			mgr := resources.NewManager(testNamespace)
-			mgr.AddCluster(cluster)
-			result := mgr.Apply(context.TODO())
-
-			// expected result contains a cluster role binding
-			require.Len(t, result, 1)
-
-			// verify cluster role binding
-			require.Len(t, cluster.GetObjects(), 1)
+			Configure(tt.cluster, tt.msa)
+			testutils.ExecApply(t, []resources.ManagedCluster{tt.cluster}, 1, tt.wantErrors)
 			crb := &rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "velero-server",
 				},
 			}
-			assert.NoError(t, mcpClient.Get(context.TODO(), client.ObjectKeyFromObject(crb), crb))
+			assert.NoError(t, tt.cluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(crb), crb))
 			assert.Len(t, crb.Subjects, 1)
 			assert.Equal(t, tt.msa.Name, crb.Subjects[0].Name)
 			assert.Equal(t, tt.msa.Namespace, crb.Subjects[0].Namespace)

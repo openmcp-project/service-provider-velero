@@ -4,75 +4,57 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
+	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
 func TestConfigure(t *testing.T) {
 	tests := []struct {
-		name           string
+		name string // description of this test case
+		// Named input parameters for target function.
 		namespaceName  string
+		cluster        resources.ManagedCluster
 		deletionPolicy resources.DeletionPolicy
+		wantErrors     []string
 	}{
 		{
 			name:           "create and delete namespace with deletion policy delete",
 			namespaceName:  "test-namespace",
+			cluster:        resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, "test-namespace", resources.ManagedControlPlane),
 			deletionPolicy: resources.Delete,
 		},
 		{
 			name:           "create and delete namespace with deletion policy orphan",
 			namespaceName:  "test-namespace",
+			cluster:        resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, "test-namespace", resources.ManagedControlPlane),
 			deletionPolicy: resources.Orphan,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			clientgoscheme.AddToScheme(scheme)
+			Configure(tt.cluster, tt.deletionPolicy)
+			testutils.ExecApply(t, []resources.ManagedCluster{tt.cluster}, 1, tt.wantErrors)
 
-			// init workload cluster with workload objects
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			cluster := resources.NewManagedCluster(clusters.NewTestClusterFromClient("client", fakeClient), &rest.Config{}, tt.namespaceName, resources.WorkloadCluster)
-
-			Configure(cluster, tt.deletionPolicy)
-			mgr := resources.NewManager(tt.namespaceName)
-			mgr.AddCluster(cluster)
-
-			// create namespace
-			result := mgr.Apply(context.TODO())
-
-			// expected result contains a namespace
-			require.Len(t, result, 1)
-
-			// verify namespace created
-			require.Len(t, cluster.GetObjects(), 1)
 			ns := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: tt.namespaceName,
 				},
 			}
-			assert.NoError(t, fakeClient.Get(context.TODO(), client.ObjectKeyFromObject(ns), ns))
+			assert.NoError(t, tt.cluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(ns), ns))
 			assert.Equal(t, tt.namespaceName, ns.Name)
 
 			// delete namespace
-			result = mgr.Delete(context.TODO())
-
-			// expected result contains a namespace
-			require.Len(t, result, 1)
+			testutils.ExecDelete(t, []resources.ManagedCluster{tt.cluster}, 1, tt.wantErrors)
 
 			// verify namespace deleted
-			err := fakeClient.Get(context.TODO(), client.ObjectKeyFromObject(ns), ns)
+			err := tt.cluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(ns), ns)
 			if tt.deletionPolicy == resources.Delete {
 				assert.Error(t, err)
 				assert.True(t, errors.IsNotFound(err))

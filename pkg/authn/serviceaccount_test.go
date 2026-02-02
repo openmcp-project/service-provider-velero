@@ -5,21 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
+	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 const (
@@ -34,55 +31,55 @@ func TestManagedServiceAccount_Configure(t *testing.T) {
 	existingExpirationTime := time.Now().Add(time.Hour).Format(time.RFC3339)
 	existingCreationTime := metav1.NewTime(time.Now().Add(-1 * time.Minute).Truncate(time.Second))
 	tests := []struct {
-		name                string
-		workloadObjects     []client.Object
-		mcpObjects          []client.Object
+		name string // description of this test case
+		// Named input parameters for target function.
+		workloadCluster     resources.ManagedCluster
+		mcpCluster          resources.ManagedCluster
 		pollInterval        time.Duration
 		wantSecretCreation  bool
 		wantTokenGeneration bool
+		wantErrors          []string
 	}{
 		{
 			name:                "secret is initially created with new token",
-			workloadObjects:     []client.Object{},
-			mcpObjects:          []client.Object{},
+			workloadCluster:     resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload"), &rest.Config{}, testNamespace, resources.WorkloadCluster),
+			mcpCluster:          resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, testNamespace, resources.ManagedControlPlane),
 			pollInterval:        time.Minute * 15,
 			wantSecretCreation:  true,
 			wantTokenGeneration: true,
 		},
 		{
 			name: "existing secret requires new token",
-			workloadObjects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      secretName,
-						Namespace: testNamespace,
-						Annotations: map[string]string{
-							expAnnotation: existingExpirationTime,
-						},
-						CreationTimestamp: existingCreationTime,
+			workloadCluster: resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload", &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: testNamespace,
+					Annotations: map[string]string{
+						expAnnotation: existingExpirationTime,
 					},
+					CreationTimestamp: existingCreationTime,
 				},
 			},
-			mcpObjects:          []client.Object{},
+			), &rest.Config{}, testNamespace, resources.WorkloadCluster),
+			mcpCluster:          resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, testNamespace, resources.ManagedControlPlane),
 			pollInterval:        2 * time.Hour,
 			wantSecretCreation:  false,
 			wantTokenGeneration: true,
 		},
 		{
 			name: "existing secret does not require new token",
-			workloadObjects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      secretName,
-						Namespace: testNamespace,
-						Annotations: map[string]string{
-							expAnnotation: existingExpirationTime,
-						},
-						CreationTimestamp: existingCreationTime,
+			workloadCluster: resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload", &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: testNamespace,
+					Annotations: map[string]string{
+						expAnnotation: existingExpirationTime,
 					},
+					CreationTimestamp: existingCreationTime,
 				},
 			},
-			mcpObjects:          []client.Object{},
+			), &rest.Config{}, testNamespace, resources.WorkloadCluster),
+			mcpCluster:          resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, testNamespace, resources.ManagedControlPlane),
 			pollInterval:        time.Minute * 15,
 			wantSecretCreation:  false,
 			wantTokenGeneration: false,
@@ -96,41 +93,22 @@ func TestManagedServiceAccount_Configure(t *testing.T) {
 					Namespace: testNamespace,
 				},
 			}
-			scheme := runtime.NewScheme()
-			clientgoscheme.AddToScheme(scheme)
-
-			// init workload cluster with workload objects
-			workClient := fake.NewClientBuilder().WithObjects(tt.workloadObjects...).WithScheme(scheme).Build()
-			workCluster := resources.NewManagedCluster(clusters.NewTestClusterFromClient("workload", workClient), &rest.Config{}, testNamespace, resources.WorkloadCluster)
-
-			// init mcp cluster with mcp objects
-			mcpClient := fake.NewClientBuilder().WithObjects(tt.mcpObjects...).WithScheme(scheme).Build()
-			mcpCluster := resources.NewManagedCluster(clusters.NewTestClusterFromClient("mcp", mcpClient), &rest.Config{}, testNamespace, resources.ManagedControlPlane)
-
 			// call function under test
-			tokenApplyFunc := m.Configure(workCluster, mcpCluster, tt.pollInterval)
-
-			// invoke reconcile with manager
-			mgr := resources.NewManager(testNamespace)
-			mgr.AddCluster(mcpCluster)
-			mgr.AddCluster(workCluster)
-			result := mgr.Apply(context.TODO())
-
-			// expected result contains a service account on the mcp and a secret on the workload cluster
-			require.Len(t, result, 2)
+			tokenApplyFunc := m.Configure(tt.workloadCluster, tt.mcpCluster, tt.pollInterval)
+			testutils.ExecApply(t, []resources.ManagedCluster{tt.mcpCluster, tt.workloadCluster}, 2, tt.wantErrors)
 
 			// verify service account exists
-			require.Len(t, mcpCluster.GetObjects(), 1)
+			require.Len(t, tt.mcpCluster.GetObjects(), 1)
 			sa := &corev1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "velero-server",
 					Namespace: testNamespace,
 				},
 			}
-			assert.NoError(t, mcpClient.Get(context.TODO(), client.ObjectKeyFromObject(sa), sa))
+			assert.NoError(t, tt.mcpCluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(sa), sa))
 
 			// verify secret exists
-			require.Len(t, workCluster.GetObjects(), 1)
+			require.Len(t, tt.workloadCluster.GetObjects(), 1)
 
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -138,7 +116,7 @@ func TestManagedServiceAccount_Configure(t *testing.T) {
 					Namespace: testNamespace,
 				},
 			}
-			require.NoError(t, workClient.Get(context.TODO(), client.ObjectKeyFromObject(secret), secret))
+			require.NoError(t, tt.workloadCluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(secret), secret))
 
 			// workload cluster secret must have an expiration date
 			require.NotEmpty(t, secret.GetAnnotations()[expAnnotation])

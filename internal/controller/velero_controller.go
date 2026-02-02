@@ -68,15 +68,20 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 		return ctrl.Result{}, err
 	}
 	results := mgr.Apply(ctx)
+	errRes := false
 	for _, r := range results {
 		if r.Error != nil {
 			l.Error(r.Error, objectutils.ObjectID(r.Object.GetObject()))
+			errRes = true
 		}
 	}
 	managedResources := resultsToResources(results)
 	obj.Status.Resources = managedResources
 	if allResourcesReady(managedResources) {
 		spruntime.StatusReady(obj)
+	}
+	if errRes {
+		return ctrl.Result{}, errors.New("reconciliation result contains errors")
 	}
 	return ctrl.Result{}, nil
 }

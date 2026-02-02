@@ -56,7 +56,7 @@ func (r *PCReconciler[T]) WithUpdateChannel(c chan event.GenericEvent) *PCReconc
 	return r
 }
 
-// Reconcile acts as a sender to notify receivers about provider config changes .
+// Reconcile acts as a sender to notify receivers about provider config changes.
 func (r *PCReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	obj := r.emptyObj()
 	notify := event.GenericEvent{}
