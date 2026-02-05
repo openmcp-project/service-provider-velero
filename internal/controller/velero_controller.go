@@ -57,69 +57,60 @@ type VeleroReconciler struct {
 
 // CreateOrUpdate is called on every add or update event
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
-	l := log.FromContext(ctx)
 	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
-	err := r.ensureInstanceID(ctx, obj)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	mgr, err := r.configResources(obj, pc, clusters)
+	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	results := mgr.Apply(ctx)
-	errRes := false
-	for _, r := range results {
-		if r.Error != nil {
-			l.Error(r.Error, objectutils.ObjectID(r.Object.GetObject()))
-			errRes = true
-		}
-	}
-	managedResources := resultsToResources(results)
+	managedResources, resultContainsErrors := resultsToResources(ctx, results)
 	obj.Status.Resources = managedResources
 	if allResourcesReady(managedResources) {
 		spruntime.StatusReady(obj)
 	}
-	if errRes {
-		return ctrl.Result{}, errors.New("reconciliation result contains errors")
+	if resultContainsErrors {
+		return ctrl.Result{}, errors.New("createOrUpdate result contains managed objects with reconcile errors")
 	}
 	return ctrl.Result{}, nil
 }
 
 // Delete is called on every delete event
 func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
-	l := log.FromContext(ctx)
 	spruntime.StatusTerminating(obj)
-	mgr, err := r.configResources(obj, pc, clusters)
+	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	results := mgr.Delete(ctx)
-	for _, r := range results {
-		if r.Error != nil {
-			l.Error(r.Error, objectutils.ObjectID(r.Object.GetObject()))
-		}
-	}
+	managedResources, resultContainsErrors := resultsToResources(ctx, results)
+	obj.Status.Resources = managedResources
 	if resources.AllDeleted(results) {
 		return ctrl.Result{}, nil
+	}
+	if resultContainsErrors {
+		return ctrl.Result{}, errors.New("delete result contains managed objects with reconcile errors")
 	}
 	return ctrl.Result{
 		RequeueAfter: time.Second * 5,
 	}, nil
 }
 
-func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (*resources.Manager, error) {
-	// check all requested compoments are available
+func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (*resources.Manager, error) {
+	err := r.ensureInstanceID(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	// ensure that all images are available for the requested velero and plugin versions
 	images := resolveImages(obj.Spec, *pc)
 	if images == nil {
 		return nil, errors.New("requested version is not available")
 	}
 	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster, clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluster)
 	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster, clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
+
 	// ### MCP RESOURCES ###
-	// deletion policy orphan to prevent deleting end user data that we are not aware of
+	// set namespace deletion policy orphan to prevent deleting end user data that we are not aware of
 	namespace.Configure(mcpCluster, resources.Orphan)
-	// service account
 	mcpServiceAccount := &authn.ManagedServiceAccount{
 		NamespacedName: types.NamespacedName{
 			Name:      "velero-server",
@@ -130,27 +121,25 @@ func (r *VeleroReconciler) configResources(obj *apiv1alpha1.Velero, pc *apiv1alp
 	if err := crds.Configure(mcpCluster); err != nil {
 		return nil, err
 	}
-	// creates ClusterRolebinding to ClusterRole cluster-admin for ServiceAccount 'velero-server'
 	authz.Configure(mcpCluster, mcpServiceAccount)
 	// create 'dummy' deployment
 	deployment.ConfigureMcp(mcpCluster, images["velero"], instance.GetID(obj))
 
 	// ### WORKLOAD RESOURCES ###
-	// create velero namespace
 	namespace.Configure(workloadCluster, resources.Delete)
-	// sync image pull secrets to workload cluster
 	secret.Configure(workloadCluster, r.PlatformCluster, pc.Spec.ImagePullSecrets, r.PodNamespace)
-	// server deployment
 	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, pc.Spec.ImagePullSecrets, images, tokenFunc)
 
-	// manager
+	// ### MANAGE WORKLOAD AND MCP CLUSTER ###
 	mgr := resources.NewManager(instance.GetID(obj))
 	mgr.AddCluster(mcpCluster)
 	mgr.AddCluster(workloadCluster)
 	return mgr, nil
 }
 
-func resultsToResources(results []resources.Result) []apiv1alpha1.ManagedResource {
+func resultsToResources(ctx context.Context, results []resources.Result) ([]apiv1alpha1.ManagedResource, bool) {
+	l := log.FromContext(ctx)
+	containsError := false
 	resources := []apiv1alpha1.ManagedResource{}
 	for _, res := range results {
 		obj := res.Object.GetObject()
@@ -165,8 +154,11 @@ func resultsToResources(results []resources.Result) []apiv1alpha1.ManagedResourc
 			Message:  status.Message,
 			Location: status.Location,
 		})
+		if res.Error != nil {
+			l.Error(res.Error, "objectID", objectutils.ObjectID(obj))
+		}
 	}
-	return resources
+	return resources, containsError
 }
 
 func nilIfEmptyString(str string) *string {

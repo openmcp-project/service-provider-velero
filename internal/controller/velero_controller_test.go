@@ -42,7 +42,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name: "test delete",
+			name: "Successful createOrUpdate",
 			obj: &apiv1alpha1.Velero{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -87,6 +87,58 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			},
 			want:    ctrl.Result{},
 			wantErr: false,
+		},
+		{
+			name: "Velero version not available",
+			obj: createVeleroObj("v3", createPlugins(
+				map[string]string{
+					"aws": "v2",
+				},
+			)),
+			pc: createProviderConfig([]apiv1alpha1.AvailableVeleroImages{
+				{
+					Name:     "velero",
+					Versions: []string{"v1", "v2"},
+					Image:    "velero/velero",
+				},
+				{
+					Name:     "aws",
+					Versions: []string{"v1", "v2"},
+					Image:    "velero/aws",
+				},
+			}),
+			clusters: spruntime.ClusterContext{
+				MCPCluster:      testutils.CreateFakeCluster(t, "mcp").WithRESTConfig(&rest.Config{}),
+				WorkloadCluster: testutils.CreateFakeCluster(t, "workload"),
+			},
+			want:    ctrl.Result{},
+			wantErr: true,
+		},
+		{
+			name: "Plugin version not available",
+			obj: createVeleroObj("v1", createPlugins(
+				map[string]string{
+					"aws": "v3",
+				},
+			)),
+			pc: createProviderConfig([]apiv1alpha1.AvailableVeleroImages{
+				{
+					Name:     "velero",
+					Versions: []string{"v1", "v2"},
+					Image:    "velero/velero",
+				},
+				{
+					Name:     "aws",
+					Versions: []string{"v1", "v2"},
+					Image:    "velero/aws",
+				},
+			}),
+			clusters: spruntime.ClusterContext{
+				MCPCluster:      testutils.CreateFakeCluster(t, "mcp").WithRESTConfig(&rest.Config{}),
+				WorkloadCluster: testutils.CreateFakeCluster(t, "workload"),
+			},
+			want:    ctrl.Result{},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -186,5 +238,44 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 				t.Fatal("Delete() succeeded unexpectedly")
 			}
 		})
+	}
+}
+
+func createVeleroObj(version string, plugins []apiv1alpha1.VeleroPlugin) *apiv1alpha1.Velero {
+	return &apiv1alpha1.Velero{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: apiv1alpha1.VeleroSpec{
+			Version: version,
+			Plugins: plugins,
+		},
+	}
+}
+
+func createPlugins(plugins map[string]string) []apiv1alpha1.VeleroPlugin {
+	result := make([]apiv1alpha1.VeleroPlugin, 0, len(plugins))
+	for k, v := range plugins {
+		result = append(result, apiv1alpha1.VeleroPlugin{
+			Name:    k,
+			Version: v,
+		})
+	}
+	return result
+}
+
+func createProviderConfig(availableImages []apiv1alpha1.AvailableVeleroImages) *apiv1alpha1.ProviderConfig {
+	return &apiv1alpha1.ProviderConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+		Spec: apiv1alpha1.ProviderConfigSpec{
+			PollInterval: &metav1.Duration{
+				Duration: time.Minute,
+			},
+			ImagePullSecrets: []corev1.LocalObjectReference{},
+			AvailableImages:  availableImages,
+		},
 	}
 }

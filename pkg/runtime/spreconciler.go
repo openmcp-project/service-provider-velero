@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// ServiceProviderReconciler implements any business logic required to manage your APIObject
+// ServiceProviderReconciler implements any business logic required to manage ServiceProviderAPI objects
 type ServiceProviderReconciler[T ServiceProviderAPI, PC ProviderConfig] interface {
 	// CreateOrUpdate is called on every add or update event
 	CreateOrUpdate(ctx context.Context, obj T, pc PC, clusters ClusterContext) (ctrl.Result, error)
@@ -37,18 +37,20 @@ type ServiceProviderReconciler[T ServiceProviderAPI, PC ProviderConfig] interfac
 // More info on the deployment model:
 // https://openmcp-project.github.io/docs/about/design/service-provider#deployment-model
 type ClusterContext struct {
-	MCPCluster      *clusters.Cluster
+	// MCPCluster is the managed control plane that belongs to the current reconcile request
+	MCPCluster *clusters.Cluster
+	// WorkloadCluster is the workload cluster that belongs the current reconcile request
 	WorkloadCluster *clusters.Cluster
 }
 
-// ServiceProviderAPI represents an onboarding api type
+// ServiceProviderAPI represents the end-user facing onboarding api type
 type ServiceProviderAPI interface {
 	client.Object
 	ServiceProviderAPIStatus
 	Finalizer() string
 }
 
-// ServiceProviderAPIStatus represents the status type of an onboarding api type
+// ServiceProviderAPIStatus represents the common status contract of ServiceProviderAPI types
 type ServiceProviderAPIStatus interface {
 	// GetStatus returns the status object
 	GetStatus() any
@@ -72,12 +74,20 @@ type ProviderConfig interface {
 // SPReconciler implements a generic reconcile loop to separate platform
 // and service provider developer space.
 type SPReconciler[T ServiceProviderAPI, PC ProviderConfig] struct {
-	platformCluster           *clusters.Cluster
-	onboardingCluster         *clusters.Cluster
-	clusterAccessReconciler   clusteraccess.Reconciler
+	// platformCluster represents the platform cluster of the v2 architecture
+	platformCluster *clusters.Cluster
+	// onboardingCluster represents the onboarding cluster of the v2 architecture
+	onboardingCluster *clusters.Cluster
+	// clusterAccessReconciler reconciles access to MCP and workload clusters
+	clusterAccessReconciler clusteraccess.Reconciler
+	// serviceProviderReonciler reconciles the end-user facing onboarding API of a service provider
 	serviceProviderReconciler ServiceProviderReconciler[T, PC]
-	providerConfig            atomic.Pointer[PC]
-	emptyObj                  func() T
+	// providerConfig represents the platform operator facing platform API of a service provider
+	providerConfig atomic.Pointer[PC]
+	// withWorkloadCluster defines whether a service provider requires access to a workload cluster
+	withWorkloadCluster bool
+	// emptyObj creates an empty object of the api type
+	emptyObj func() T
 }
 
 // NewSPReconciler creates a reconciler instance for the given types.
@@ -108,6 +118,18 @@ func (r *SPReconciler[T, PC]) WithClusterAccessReconciler(car clusteraccess.Reco
 // WithServiceProviderReconciler sets the service provider reconciler.
 func (r *SPReconciler[T, PC]) WithServiceProviderReconciler(dsr ServiceProviderReconciler[T, PC]) *SPReconciler[T, PC] {
 	r.serviceProviderReconciler = dsr
+	return r
+}
+
+// WithWorkloadCluster sets if the service provider reconciler requests a workload cluster
+func (r *SPReconciler[T, PC]) WithWorkloadCluster(b bool) *SPReconciler[T, PC] {
+	r.withWorkloadCluster = b
+	return r
+}
+
+// WithProviderConfig sets if the service provider config.
+func (r *SPReconciler[T, PC]) WithProviderConfig(config PC) *SPReconciler[T, PC] {
+	r.providerConfig.Store(&config)
 	return r
 }
 
@@ -161,36 +183,8 @@ func (r *SPReconciler[T, PC]) updateStatus(ctx context.Context, newObj T, oldObj
 	}
 }
 
-func (r *SPReconciler[T, PC]) mcp(ctx context.Context, req ctrl.Request) (*clusters.Cluster, ctrl.Result, error) {
-	res, err := r.clusterAccessReconciler.Reconcile(ctx, req)
-	if err != nil {
-		return nil, ctrl.Result{}, err
-	}
-	if res.RequeueAfter > 0 {
-		return nil, res, nil
-	}
-	mcpCluster, err := r.clusterAccessReconciler.MCPCluster(ctx, req)
-	if err != nil {
-		return nil, ctrl.Result{}, err
-	}
-	return mcpCluster, ctrl.Result{}, nil
-}
-
-func (r *SPReconciler[T, PC]) workloadCluster(ctx context.Context, req ctrl.Request) (*clusters.Cluster, ctrl.Result, error) {
-	res, err := r.clusterAccessReconciler.Reconcile(ctx, req)
-	if err != nil {
-		return nil, ctrl.Result{}, err
-	}
-	if res.RequeueAfter > 0 {
-		return nil, res, nil
-	}
-	workloadCluster, err := r.clusterAccessReconciler.WorkloadCluster(ctx, req)
-	if err != nil {
-		return nil, ctrl.Result{}, err
-	}
-	return workloadCluster, ctrl.Result{}, nil
-}
-
+// delete eventually invokes the domain delete logic of a service provider and is the place to implement
+// common logic that should be abstracted away from a service provider developer like handling cluster access.
 func (r *SPReconciler[T, PC]) delete(ctx context.Context, obj T, pc PC) (ctrl.Result, error) {
 	l := logf.FromContext(ctx)
 	oldObj := obj.DeepCopyObject().(T)
@@ -198,7 +192,7 @@ func (r *SPReconciler[T, PC]) delete(ctx context.Context, obj T, pc PC) (ctrl.Re
 	req := ctrl.Request{NamespacedName: client.ObjectKeyFromObject(obj)}
 	accessRequestsInDeletion, err := r.areAccessRequestsInDeletion(ctx, req)
 	if err != nil {
-		l.Error(err, "failed to check access requests for landscaper instance")
+		l.Error(err, "failed to check access requests in deletion")
 		return reconcile.Result{}, err
 	}
 	if !accessRequestsInDeletion {
@@ -237,6 +231,8 @@ func (r *SPReconciler[T, PC]) delete(ctx context.Context, obj T, pc PC) (ctrl.Re
 	return ctrl.Result{}, nil
 }
 
+// createOrUpdate eventually invokes the domain createOrUpdate logic of a service provider and is the place to implement
+// common logic that should be abstracted away from a service provider developer like handling cluster access.
 func (r *SPReconciler[T, PC]) createOrUpdate(ctx context.Context, obj T, pc PC) (ctrl.Result, error) {
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.onboardingCluster.Client(), obj, func() error {
 		controllerutil.AddFinalizer(obj, obj.Finalizer())
@@ -256,46 +252,60 @@ func (r *SPReconciler[T, PC]) createOrUpdate(ctx context.Context, obj T, pc PC) 
 }
 
 // areAccessRequestsInDeletion determines if the access requests for a reconcile request are in deletion.
-// It returns true if at least one of the access requests (mcp, workload) is deleted or has a deletion timestamp.
+// It returns true if any access requests (mcp, workload) is deleted or has a deletion timestamp.
 // It is used to prevent renewing cluster access when deleting an ServiceProviderAPI object.
 func (r *SPReconciler[T, PC]) areAccessRequestsInDeletion(ctx context.Context, req ctrl.Request) (bool, error) {
 	accessRequest, err := r.clusterAccessReconciler.MCPAccessRequest(ctx, req)
-	if apierrors.IsNotFound(err) || accessRequest.DeletionTimestamp != nil {
+	if apierrors.IsNotFound(err) || (accessRequest != nil && accessRequest.DeletionTimestamp != nil) {
 		return true, nil
 	}
 	if err != nil {
 		return false, err
 	}
-
-	accessRequest, err = r.clusterAccessReconciler.WorkloadAccessRequest(ctx, req)
-	if apierrors.IsNotFound(err) || accessRequest.DeletionTimestamp != nil {
-		return true, nil
+	if r.withWorkloadCluster {
+		accessRequest, err = r.clusterAccessReconciler.WorkloadAccessRequest(ctx, req)
+		if apierrors.IsNotFound(err) || (accessRequest != nil && accessRequest.DeletionTimestamp != nil) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
 	}
-	if err != nil {
-		return false, err
-	}
-
 	return false, nil
 }
 
+// clusters returns any request scoped cluster that a servicer provider developer might want to access in order
+// to delivery its service.
 func (r *SPReconciler[T, PC]) clusters(ctx context.Context, req ctrl.Request) (ClusterContext, ctrl.Result, error) {
 	l := logf.FromContext(ctx)
-	mcp, res, err := r.mcp(ctx, req)
+	clusters := ClusterContext{}
+	res, err := r.clusterAccessReconciler.Reconcile(ctx, req)
 	if err != nil {
-		return ClusterContext{}, res, err
+		return clusters, ctrl.Result{}, err
 	}
-	workloadCluster, res, err := r.workloadCluster(ctx, req)
+	if res.RequeueAfter > 0 {
+		return clusters, res, nil
+	}
+	mcpCluster, err := r.clusterAccessReconciler.MCPCluster(ctx, req)
 	if err != nil {
-		l.Error(err, "workload cluster access error")
-		return ClusterContext{}, res, err
+		return clusters, ctrl.Result{}, err
 	}
-	if mcp == nil || workloadCluster == nil {
-		return ClusterContext{}, res, errors.New("cluster access missing")
+	if mcpCluster == nil {
+		return clusters, res, errors.New("mcp access missing")
 	}
-	return ClusterContext{
-		MCPCluster:      mcp,
-		WorkloadCluster: workloadCluster,
-	}, res, nil
+	clusters.MCPCluster = mcpCluster
+	if r.withWorkloadCluster {
+		workloadCluster, err := r.clusterAccessReconciler.WorkloadCluster(ctx, req)
+		if err != nil {
+			l.Error(err, "workload cluster access error")
+			return clusters, ctrl.Result{}, err
+		}
+		if workloadCluster == nil {
+			return clusters, res, errors.New("workload cluster access missing")
+		}
+		clusters.WorkloadCluster = workloadCluster
+	}
+	return clusters, res, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

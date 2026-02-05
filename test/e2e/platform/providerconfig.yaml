@@ -1,7 +1,7 @@
 apiVersion: velero.services.openmcp.cloud/v1alpha1
 kind: ProviderConfig
 metadata:
-  name: default
+  name: velero
 spec:
   pollInterval: 1m
   availableImages:

@@ -314,6 +314,7 @@ func main() {
 	).
 		WithPlatformCluster(platformCluster).
 		WithOnboardingCluster(onboardingCluster).
+		WithWorkloadCluster(true).
 		WithServiceProviderReconciler(&controller.VeleroReconciler{
 			OnboardingCluster: onboardingCluster,
 			PlatformCluster:   platformCluster,
@@ -329,7 +330,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}
-	pcr := spruntime.NewPCReconciler(func() *velerosv1alpha1.ProviderConfig {
+	pcr := spruntime.NewPCReconciler(providerName, func() *velerosv1alpha1.ProviderConfig {
 		return &velerosv1alpha1.ProviderConfig{}
 	}).
 		WithPlatformCluster(platformCluster).
