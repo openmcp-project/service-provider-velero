@@ -73,7 +73,7 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 		spruntime.StatusReady(obj)
 	}
 	if resultContainsErrors {
-		resultWithErrors := errors.New("createOrUpdate result contains managed objects with reconcile errors")
+		resultWithErrors := errors.New("resources contain reconcile errors")
 		spruntime.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
@@ -95,7 +95,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 		return ctrl.Result{}, nil
 	}
 	if resultContainsErrors {
-		resultWithErrors := errors.New("delete result contains managed objects with reconcile errors")
+		resultWithErrors := errors.New("resources contain reconcile errors")
 		spruntime.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
@@ -207,8 +207,8 @@ func resolveImages(velero apiv1alpha1.VeleroSpec, pc apiv1alpha1.ProviderConfig)
 	return res
 }
 
-// returns the image of a requested component
-// or "" if the requested component is not available
+// returns the image with its version if a requested component is available
+// or "" if a requested component is not available
 func resolveImage(name string, version string, pc apiv1alpha1.ProviderConfig) string {
 	for _, availableImage := range pc.Spec.AvailableImages {
 		if availableImage.Name != name {
@@ -216,7 +216,7 @@ func resolveImage(name string, version string, pc apiv1alpha1.ProviderConfig) st
 		}
 		for _, availableVersion := range availableImage.Versions {
 			if availableVersion == version {
-				return availableImage.Image
+				return fmt.Sprintf("%s:%s", availableImage.Image, availableVersion)
 			}
 		}
 	}
