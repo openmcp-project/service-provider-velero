@@ -1,9 +1,9 @@
 apiVersion: velero.services.openmcp.cloud/v1alpha1
 kind: Velero
 metadata:
-  name: test-mcp
+  name: test-aws-b
 spec:
-  version: "v1.17.1"
+  version: "v1.16.2"
   plugins:
     - name: "aws"
-      version: "v1.13.0"
+      version: "v1.12.2"

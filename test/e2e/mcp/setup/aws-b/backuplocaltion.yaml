@@ -1,0 +1,30 @@
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: default
+  namespace: velero
+spec:
+  accessMode: ReadWrite
+  credential:
+    name: cloud-credentials
+    key: cloud
+  config:
+    region: minio
+    s3ForcePathStyle: "true"
+    s3Url: http://minio.velero.svc:9000
+  default: true
+  objectStorage:
+    bucket: velero-mcp-b
+  provider: aws
+  validationFrequency: "5s"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    component: velero
+  name: cloud-credentials
+  namespace: velero
+type: Opaque
+data:
+  cloud: W2RlZmF1bHRdCmF3c19hY2Nlc3Nfa2V5X2lkID0gbWluaW8KYXdzX3NlY3JldF9hY2Nlc3Nfa2V5ID0gbWluaW8xMjMK

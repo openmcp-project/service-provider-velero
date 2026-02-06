@@ -14,7 +14,7 @@ spec:
     s3Url: http://minio.velero.svc:9000
   default: true
   objectStorage:
-    bucket: velero
+    bucket: velero-mcp-a
   provider: aws
   validationFrequency: "5s"
 ---

@@ -221,11 +221,12 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					return tt.manager
 				},
 			}
-			_, gotErr := r.CreateOrUpdate(context.Background(), tt.obj, tt.pc, tt.clusters)
+			got, gotErr := r.CreateOrUpdate(context.Background(), tt.obj, tt.pc, tt.clusters)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("CreateOrUpdate() failed: %v", gotErr)
 				}
+				assert.Equal(t, gotErr.Error(), tt.obj.Status.Conditions[0].Message)
 				return
 			}
 			if tt.wantErr {
@@ -234,6 +235,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			if tt.wantStatusPhase != "" {
 				assert.Equal(t, tt.wantStatusPhase, tt.obj.Status.Phase)
 			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -378,6 +380,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 				if !tt.wantErr {
 					t.Errorf("Delete() failed: %v", gotErr)
 				}
+				assert.Equal(t, gotErr.Error(), tt.obj.Status.Conditions[0].Message)
 				return
 			}
 			if tt.wantErr {

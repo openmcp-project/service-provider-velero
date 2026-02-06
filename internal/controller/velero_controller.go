@@ -63,6 +63,7 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
+		spruntime.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, err
 	}
 	results := mgr.Apply(ctx)
@@ -72,7 +73,9 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 		spruntime.StatusReady(obj)
 	}
 	if resultContainsErrors {
-		return ctrl.Result{}, errors.New("createOrUpdate result contains managed objects with reconcile errors")
+		resultWithErrors := errors.New("createOrUpdate result contains managed objects with reconcile errors")
+		spruntime.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
+		return ctrl.Result{}, resultWithErrors
 	}
 	return ctrl.Result{}, nil
 }
@@ -82,6 +85,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	spruntime.StatusTerminating(obj)
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
+		spruntime.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, err
 	}
 	results := mgr.Delete(ctx)
@@ -91,7 +95,9 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 		return ctrl.Result{}, nil
 	}
 	if resultContainsErrors {
-		return ctrl.Result{}, errors.New("delete result contains managed objects with reconcile errors")
+		resultWithErrors := errors.New("delete result contains managed objects with reconcile errors")
+		spruntime.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
+		return ctrl.Result{}, resultWithErrors
 	}
 	return ctrl.Result{
 		RequeueAfter: time.Second * 5,

@@ -1,4 +1,5 @@
 # official example from https://github.com/vmware-tanzu/velero/blob/v1.17.1/examples/minio/00-minio-deployment.yaml
+# slightly modified to work with two tenant/mcps that use two different buckets
 
 # Copyright 2017 the Velero contributors.
 #
@@ -109,7 +110,9 @@ spec:
           command:
             - /bin/sh
             - -c
-            - "mc --config-dir=/config alias set velero http://minio:9000 minio minio123 && mc --config-dir=/config mb -p velero/velero"
+            - >
+              mc --config-dir=/config alias set velero http://minio:9000 minio minio123 && mc --config-dir=/config mb -p velero/velero-mcp-a &&
+              mc --config-dir=/config mb -p velero/velero velero/velero-mcp-b
           volumeMounts:
             - name: config
               mountPath: "/config"
