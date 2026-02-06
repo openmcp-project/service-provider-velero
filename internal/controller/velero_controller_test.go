@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/stretchr/testify/assert"
 
@@ -51,21 +52,9 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 	}{
 		{
 			name: "managed objects ready -> status ready",
-			obj: &apiv1alpha1.Velero{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "test",
-				},
-				Spec: apiv1alpha1.VeleroSpec{
-					Version: "v1",
-					Plugins: []apiv1alpha1.VeleroPlugin{
-						{
-							Name:    "aws",
-							Version: "v2",
-						},
-					},
-				},
-			},
+			obj: createVeleroObj("v1", createPlugins(map[string]string{
+				"aws": "v2",
+			})),
 			pc: &apiv1alpha1.ProviderConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
@@ -92,7 +81,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			clusters: fakeClusterContext(t),
 			manager: fakeManager{
 				results: []resources.Result{
-					fakeResult(apiv1alpha1.Ready, resources.ManagedControlPlane, nil),
+					fakeResult(apiv1alpha1.Ready, controllerutil.OperationResultCreated, resources.ManagedControlPlane, nil),
 				},
 			},
 			want:            ctrl.Result{},
@@ -101,21 +90,9 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		},
 		{
 			name: "managed objects not ready -> status progressing",
-			obj: &apiv1alpha1.Velero{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "test",
-				},
-				Spec: apiv1alpha1.VeleroSpec{
-					Version: "v1",
-					Plugins: []apiv1alpha1.VeleroPlugin{
-						{
-							Name:    "aws",
-							Version: "v2",
-						},
-					},
-				},
-			},
+			obj: createVeleroObj("v1", createPlugins(map[string]string{
+				"aws": "v2",
+			})),
 			pc: &apiv1alpha1.ProviderConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
@@ -142,7 +119,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			clusters: fakeClusterContext(t),
 			manager: fakeManager{
 				results: []resources.Result{
-					fakeResult(apiv1alpha1.Progressing, resources.ManagedControlPlane, nil),
+					fakeResult(apiv1alpha1.Progressing, controllerutil.OperationResultCreated, resources.ManagedControlPlane, nil),
 				},
 			},
 			want:            ctrl.Result{},
@@ -151,21 +128,9 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		},
 		{
 			name: "managed objects with errors -> error",
-			obj: &apiv1alpha1.Velero{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "test",
-				},
-				Spec: apiv1alpha1.VeleroSpec{
-					Version: "v1",
-					Plugins: []apiv1alpha1.VeleroPlugin{
-						{
-							Name:    "aws",
-							Version: "v2",
-						},
-					},
-				},
-			},
+			obj: createVeleroObj("v1", createPlugins(map[string]string{
+				"aws": "v2",
+			})),
 			pc: &apiv1alpha1.ProviderConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
@@ -192,7 +157,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			clusters: fakeClusterContext(t),
 			manager: fakeManager{
 				results: []resources.Result{
-					fakeResult(apiv1alpha1.Failed, resources.ManagedControlPlane, errors.New("test")),
+					fakeResult(apiv1alpha1.Failed, controllerutil.OperationResultCreated, resources.ManagedControlPlane, errors.New("test")),
 				},
 			},
 			want:    ctrl.Result{},
@@ -285,22 +250,10 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name: "successful delete",
-			obj: &apiv1alpha1.Velero{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "test",
-				},
-				Spec: apiv1alpha1.VeleroSpec{
-					Version: "v1",
-					Plugins: []apiv1alpha1.VeleroPlugin{
-						{
-							Name:    "aws",
-							Version: "v2",
-						},
-					},
-				},
-			},
+			name: "managed objects deleted -> no error, status terminating",
+			obj: createVeleroObj("v1", createPlugins(map[string]string{
+				"aws": "v2",
+			})),
 			pc: &apiv1alpha1.ProviderConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
@@ -325,9 +278,89 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 				},
 			},
 			clusters: fakeClusterContext(t),
-			manager:  fakeManager{},
-			want:     ctrl.Result{},
-			wantErr:  false,
+			manager: fakeManager{
+				results: []resources.Result{
+					fakeResult(apiv1alpha1.Terminating, resources.OperationResultDeleted, resources.ManagedControlPlane, nil),
+				},
+			},
+			want:    ctrl.Result{},
+			wantErr: false,
+		},
+		{
+			name: "managed objects not deleted -> requeue, status terminating",
+			obj: createVeleroObj("v1", createPlugins(map[string]string{
+				"aws": "v2",
+			})),
+			pc: &apiv1alpha1.ProviderConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "default",
+				},
+				Spec: apiv1alpha1.ProviderConfigSpec{
+					PollInterval: &metav1.Duration{
+						Duration: time.Minute,
+					},
+					ImagePullSecrets: []corev1.LocalObjectReference{},
+					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
+						{
+							Name:     "velero",
+							Versions: []string{"v1"},
+							Image:    "velero/velero",
+						},
+						{
+							Name:     "aws",
+							Versions: []string{"v2"},
+							Image:    "velero/aws",
+						},
+					},
+				},
+			},
+			clusters: fakeClusterContext(t),
+			manager: fakeManager{
+				results: []resources.Result{
+					fakeResult(apiv1alpha1.Terminating, resources.OperationResultDeletionRequested, resources.ManagedControlPlane, nil),
+				},
+			},
+			want: ctrl.Result{
+				RequeueAfter: 5 * time.Second,
+			},
+			wantErr: false,
+		},
+		{
+			name: "managed objects with errors -> error",
+			obj: createVeleroObj("v1", createPlugins(map[string]string{
+				"aws": "v2",
+			})),
+			pc: &apiv1alpha1.ProviderConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "default",
+				},
+				Spec: apiv1alpha1.ProviderConfigSpec{
+					PollInterval: &metav1.Duration{
+						Duration: time.Minute,
+					},
+					ImagePullSecrets: []corev1.LocalObjectReference{},
+					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
+						{
+							Name:     "velero",
+							Versions: []string{"v1"},
+							Image:    "velero/velero",
+						},
+						{
+							Name:     "aws",
+							Versions: []string{"v2"},
+							Image:    "velero/aws",
+						},
+					},
+				},
+			},
+			clusters: fakeClusterContext(t),
+			manager: fakeManager{
+				results: []resources.Result{
+					fakeResult(apiv1alpha1.Terminating, resources.OperationResultDeletionRequested, resources.ManagedControlPlane, errors.New("test")),
+				},
+			},
+			want:    ctrl.Result{},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -340,7 +373,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 					return tt.manager
 				},
 			}
-			_, gotErr := r.Delete(context.Background(), tt.obj, tt.pc, tt.clusters)
+			got, gotErr := r.Delete(context.Background(), tt.obj, tt.pc, tt.clusters)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("Delete() failed: %v", gotErr)
@@ -350,6 +383,8 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 			if tt.wantErr {
 				t.Fatal("Delete() succeeded unexpectedly")
 			}
+			assert.Equal(t, tt.want, got)
+			assert.Equal(t, spruntime.StatusPhaseTerminating, tt.obj.Status.Phase)
 		})
 	}
 }
@@ -459,7 +494,7 @@ func fakeClusterContext(t *testing.T) spruntime.ClusterContext {
 	}
 }
 
-func fakeResult(phase apiv1alpha1.InstancePhase, clusterType resources.ClusterType, err error) resources.Result {
+func fakeResult(phase apiv1alpha1.InstancePhase, opResult controllerutil.OperationResult, clusterType resources.ClusterType, err error) resources.Result {
 	return resources.Result{
 		Object: fakeObject{
 			status: resources.Status{
@@ -467,7 +502,8 @@ func fakeResult(phase apiv1alpha1.InstancePhase, clusterType resources.ClusterTy
 				Location: apiv1alpha1.ResourceLocation(clusterType),
 			},
 		},
-		Cluster: resources.NewManagedCluster(nil, nil, "", clusterType),
-		Error:   err,
+		OperationResult: opResult,
+		Cluster:         resources.NewManagedCluster(nil, nil, "", clusterType),
+		Error:           err,
 	}
 }
