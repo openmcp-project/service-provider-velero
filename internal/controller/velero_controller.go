@@ -24,6 +24,7 @@ import (
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1 "k8s.io/api/core/v1"
@@ -53,6 +54,8 @@ type VeleroReconciler struct {
 	PlatformCluster *clusters.Cluster
 	// PodNamespace is the namespace where this controller is deployed in.
 	PodNamespace string
+	// Create a manager for the obj to reconcile
+	CreateManager func(client.Object) resources.Manager
 }
 
 // CreateOrUpdate is called on every add or update event
@@ -95,7 +98,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	}, nil
 }
 
-func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (*resources.Manager, error) {
+func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (resources.Manager, error) {
 	err := r.ensureInstanceID(ctx, obj)
 	if err != nil {
 		return nil, err
@@ -131,7 +134,8 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, pc.Spec.ImagePullSecrets, images, tokenFunc)
 
 	// ### MANAGE WORKLOAD AND MCP CLUSTER ###
-	mgr := resources.NewManager(instance.GetID(obj))
+	// mgr := resources.NewManager(instance.GetID(obj))
+	mgr := r.CreateManager(obj)
 	mgr.AddCluster(mcpCluster)
 	mgr.AddCluster(workloadCluster)
 	return mgr, nil
@@ -155,6 +159,7 @@ func resultsToResources(ctx context.Context, results []resources.Result) ([]apiv
 			Location: status.Location,
 		})
 		if res.Error != nil {
+			containsError = true
 			l.Error(res.Error, "objectID", objectutils.ObjectID(obj))
 		}
 	}

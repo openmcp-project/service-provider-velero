@@ -46,12 +46,15 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/openmcp-project/service-provider-velero/pkg/instance"
+	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
 
 	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
@@ -319,6 +322,9 @@ func main() {
 			OnboardingCluster: onboardingCluster,
 			PlatformCluster:   platformCluster,
 			PodNamespace:      podNamespace,
+			CreateManager: func(obj client.Object) resources.Manager {
+				return resources.NewManager(instance.GetID(obj))
+			},
 		}).
 		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).

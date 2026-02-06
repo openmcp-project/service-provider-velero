@@ -5,6 +5,8 @@ import (
 	"encoding/base32"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 )
 
@@ -14,8 +16,11 @@ const (
 )
 
 // GetID returns the instance id of the Velero object.
-func GetID(o *v1alpha1.Velero) string {
-	return o.Labels[labelInstanceID]
+func GetID(o client.Object) string {
+	if o.GetLabels() == nil {
+		return ""
+	}
+	return o.GetLabels()[labelInstanceID]
 }
 
 // SetID sets the instance id of the Velero object.

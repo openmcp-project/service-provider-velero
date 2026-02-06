@@ -24,36 +24,43 @@ const (
 
 type dependents map[ManagedObject][]dependency
 
+// Manager manages the objects of an arbitrary number of clusters
+type Manager interface {
+	AddCluster(mc ManagedCluster)
+	Apply(context.Context) []Result
+	Delete(context.Context) []Result
+}
+
 // NewManager creates a new Manager instance.
-func NewManager(instanceID string) *Manager {
-	return &Manager{
+func NewManager(instanceID string) Manager {
+	return &managerImpl{
 		instanceID: instanceID,
 		clusters:   []ManagedCluster{},
 	}
 }
 
-// Manager manages clusters and invokes reconciliation of ManagedObjects.
-type Manager struct {
+// managerImpl manages clusters and invokes reconciliation of ManagedObjects.
+type managerImpl struct {
 	instanceID string
 	clusters   []ManagedCluster
 }
 
 // AddCluster adds a cluster to a Manager.
-func (m *Manager) AddCluster(mc ManagedCluster) {
+func (m *managerImpl) AddCluster(mc ManagedCluster) {
 	m.clusters = append(m.clusters, mc)
 }
 
 // Apply invokes reconciliation of all ManagedObjects.
-func (m *Manager) Apply(ctx context.Context) []Result {
+func (m *managerImpl) Apply(ctx context.Context) []Result {
 	return m.reconcileObjects(ctx, false)
 }
 
 // Delete invokes deletion of all ManagedObjects.
-func (m *Manager) Delete(ctx context.Context) []Result {
+func (m *managerImpl) Delete(ctx context.Context) []Result {
 	return m.reconcileObjects(ctx, true)
 }
 
-func (m *Manager) reconcileObjects(ctx context.Context, isDeletion bool) []Result {
+func (m *managerImpl) reconcileObjects(ctx context.Context, isDeletion bool) []Result {
 	dependents := m.getDependents()
 
 	// Apply objects from each cluster.
@@ -68,7 +75,7 @@ func (m *Manager) reconcileObjects(ctx context.Context, isDeletion bool) []Resul
 	return results
 }
 
-func (m *Manager) reconcileObject(ctx context.Context, mc ManagedCluster, mo ManagedObject, dependents dependents, isDeletion bool) Result {
+func (m *managerImpl) reconcileObject(ctx context.Context, mc ManagedCluster, mo ManagedObject, dependents dependents, isDeletion bool) Result {
 	client := mc.GetClient()
 	obj := mo.GetObject()
 
@@ -121,7 +128,7 @@ func (m *Manager) reconcileObject(ctx context.Context, mc ManagedCluster, mo Man
 	}
 }
 
-func (m *Manager) checkForDependents(ctx context.Context, deps []dependency) error {
+func (m *managerImpl) checkForDependents(ctx context.Context, deps []dependency) error {
 	errs := []error{}
 	for _, dep := range deps {
 		obj := dep.Object.GetObject()
@@ -142,7 +149,7 @@ func (m *Manager) checkForDependents(ctx context.Context, deps []dependency) err
 	return errors.Join(errs...)
 }
 
-func (m *Manager) getDependents() dependents {
+func (m *managerImpl) getDependents() dependents {
 	deps := dependents{}
 	for _, mc := range m.clusters {
 		for _, mo := range mc.GetObjects() {
