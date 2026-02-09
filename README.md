@@ -4,25 +4,123 @@
 
 ## About this project
 
-Managed [velero](https://velero.io) offering for [openmcp](https://github.com/openmcp-project).
+Service provider velero manages the lifecycle of [Velero](https://velero.io) instances in an [openMCP](https://github.com/openmcp-project) landscape.
 
 ## Requirements and Setup
 
-Run End-to-End tests:
+To run service-provider-velero locally, use the end-to-end test suite provided with [openmcp-testing](https://github.com/openmcp-project/openmcp-testing):
 
 ```shell
 task test-e2e
 ```
 
-## End-User facing API
+## Velero API
 
-- version: velero version to install
-- plugins: currently unrestricted
+A user can request Velero for a managed control plane by choosing the Velero version and which plugins to install. The available options are defined by the platform operator via the [ProviderConfig](#providerconfig-api).
 
-## Platform Operator facing API
+```yaml
+apiVersion: velero.services.openmcp.cloud/v1alpha1
+kind: Velero
+metadata:
+  name: test-aws-a
+spec:
+  version: "v1.17.2"
+  plugins:
+    - name: "aws"
+      version: "v1.13.2"
+```
 
-- PollInterval for drift detection
-- ImagePullSecretRef allows to pull velero (plugin) images from private registries
+## ProviderConfig API
+
+Service provider Velero requires a `ProviderConfig` on the platform cluster to reconcile [Velero resources](#velero-api). The provider config allows platform operators to:
+
+- restrict the Velero and plugins versions an end users may select, 
+- configure image pull secrets for proviate OCI registries (supporting air gapped environments)
+- define a reconciliation poll interval, used to detect drift in resources deployed to the workload cluster and managed control plane.
+
+```yaml
+apiVersion: velero.services.openmcp.cloud/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: velero
+spec:
+  pollInterval: 15m
+  availableImages:
+    - name: velero
+      versions: ["v1.17.2", "v1.16.2"]
+      image: "velero/velero"
+    - name: aws
+      versions: ["v1.13.2", "v1.12.2"]
+      image: "velero/velero-plugin-for-aws"
+  imagePullSecrets:
+    - name: privateregcred
+```
+
+**Note:** Only one provider config may exist per velero service provider instance and its name must match the service provider's name.
+
+## Deployment Model
+
+Service provider Velero deploys the Velero server onto the workload cluster, while the Velero CRDs are installed on the MCP. Each tenant is isolated within its own namespace.
+
+```mermaid
+flowchart LR
+    subgraph Platform
+        provider[Service Provider Velero]
+    end
+
+    subgraph onboarding_cluster[Onboarding]
+        mcp([ManagedControlPlane])
+        velero([Velero])
+        velero -- ref --> mcp
+    end
+
+    subgraph workload_cluster[Workload]
+        subgraph tenant_namespace[Tenant Namespace]
+            velero_server[Velero Server]
+        end
+    end
+
+    subgraph mcp_cluster[MCP]
+        velero_domain_api([Velero API Types])
+    end
+
+    provider -- reconciles --> velero
+    provider -- requests --> workload_cluster
+    provider -- installs --> velero_server
+    provider -- installs --> velero_domain_api
+    mcp -- represents --> mcp_cluster
+    velero_server -- reconciles --> velero_domain_api
+```
+
+The Velero documentation provides an overview of the [Velero API types](https://velero.io/docs/main/api-types/) installed on the MCP. The API types may vary across installations depending on the specific Velero version an end-user selects.
+
+**Note:** The Kubernetes nodes on the workload cluster where the Velero server pods run must be able to resolve and reach any [backup storage location](https://velero.io/docs/main/locations/).
+
+## Development
+
+Generate code after making API changes:
+
+```shell
+task generate
+```
+
+Run unit tests:
+
+```shell
+task test
+```
+
+Build a Docker image with your latest changes:
+
+```shell
+task build:img:build-test
+```
+
+Run code validation:
+
+```shell
+task validate
+```
 
 ## Support, Feedback, Contributing
 

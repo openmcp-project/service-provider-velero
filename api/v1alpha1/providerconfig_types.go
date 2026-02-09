@@ -49,13 +49,13 @@ type ProviderConfigSpec struct {
 // AvailableVeleroImages defines the velero images that are available as part of the managed velero offering.
 type AvailableVeleroImages struct {
 	// Name of the component (velero itself or a velero plugin)
-	// +kubebuilder:validation:Required
+	// +required
 	Name string `json:"name"`
 	// Versions of component.
-	// +kubebuilder:validation:Required
+	// +required
 	Versions []string `json:"versions"`
 	// Image location of the component
-	// +kubebuilder:validation:Required
+	// +required
 	Image string `json:"image"`
 }
 
