@@ -34,9 +34,9 @@ spec:
 
 Service provider Velero requires a `ProviderConfig` on the platform cluster to reconcile [Velero resources](#velero-api). The provider config allows platform operators to:
 
-- restrict the Velero and plugins versions an end users may select, 
+- restrict the Velero and plugins versions an end users may select,
 - configure image pull secrets for proviate OCI registries (supporting air gapped environments)
-- define a reconciliation poll interval, used to detect drift in resources deployed to the workload cluster and managed control plane.
+- define a reconciliation poll interval, used to detect drift in resources deployed to the workload cluster and managed control plane. The poll interval is also used to refresh the service account token that velero uses to access the watched managed control plane.
 
 ```yaml
 apiVersion: velero.services.openmcp.cloud/v1alpha1
