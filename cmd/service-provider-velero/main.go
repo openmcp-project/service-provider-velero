@@ -386,6 +386,11 @@ func mcpPermissions() []clustersv1alpha1.PermissionsRequest {
 					Verbs:     []string{rbacv1.VerbAll},
 				},
 				{
+					APIGroups: []string{""},
+					Resources: []string{"serviceaccounts/token"},
+					Verbs:     []string{"create"},
+				},
+				{
 					APIGroups: []string{"apiextensions.k8s.io"},
 					Resources: []string{"customresourcedefinitions"},
 					Verbs:     []string{rbacv1.VerbAll},
@@ -393,6 +398,11 @@ func mcpPermissions() []clustersv1alpha1.PermissionsRequest {
 				{
 					APIGroups: []string{"apps"},
 					Resources: []string{"deployments"},
+					Verbs:     []string{rbacv1.VerbAll},
+				},
+				{
+					APIGroups: []string{"rbac.authorization.k8s.io"},
+					Resources: []string{"clusterroles", "clusterrolebindings"},
 					Verbs:     []string{rbacv1.VerbAll},
 				},
 			},
