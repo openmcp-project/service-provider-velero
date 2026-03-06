@@ -55,7 +55,7 @@ import (
 
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
+	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 
 	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/internal/controller"

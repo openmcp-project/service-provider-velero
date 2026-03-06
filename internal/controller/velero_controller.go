@@ -42,8 +42,8 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
 	"github.com/openmcp-project/service-provider-velero/pkg/objectutils"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
 	"github.com/openmcp-project/service-provider-velero/pkg/secret"
+	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 )
 
 // VeleroReconciler reconciles a Velero object
@@ -150,7 +150,7 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 func resultsToResources(ctx context.Context, results []resources.Result) ([]apiv1alpha1.ManagedResource, bool) {
 	l := log.FromContext(ctx)
 	containsError := false
-	resources := []apiv1alpha1.ManagedResource{}
+	resources := make([]apiv1alpha1.ManagedResource, 0, len(results))
 	for _, res := range results {
 		obj := res.Object.GetObject()
 		status := res.Object.GetStatus(apiv1alpha1.ResourceLocation(res.Cluster.GetClusterType()))

@@ -34,7 +34,7 @@ import (
 
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	spruntime "github.com/openmcp-project/service-provider-velero/pkg/runtime"
+	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
