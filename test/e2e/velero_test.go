@@ -11,14 +11,12 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	"github.com/openmcp-project/openmcp-testing/pkg/clusterutils"
 	openmcpconditions "github.com/openmcp-project/openmcp-testing/pkg/conditions"
 	"github.com/openmcp-project/openmcp-testing/pkg/providers"
@@ -107,14 +105,14 @@ func TestServiceProvider(t *testing.T) {
 }
 
 func restore(ctx context.Context, t *testing.T, c *envconf.Config, mcpName string) context.Context {
-	mcpPrefix := retrieveMCPClusterPrefix(ctx, t, c, mcpName)
-	mcpConfig, err := clusterutils.ConfigByPrefix(mcpPrefix, "velero")
+	mcp, err := clusterutils.MCPConfig(ctx, c, mcpName)
+	mcp.WithNamespace("velero")
 	if err != nil {
 		t.Error(err)
 		return ctx
 	}
 	// delete nginx deployment
-	cl := kubernetes.NewForConfigOrDie(mcpConfig.Client().RESTConfig())
+	cl := kubernetes.NewForConfigOrDie(mcp.Client().RESTConfig())
 	ns, err := cl.CoreV1().Namespaces().Get(ctx, "nginx-example", metav1.GetOptions{})
 	if err != nil {
 		t.Error(err)
@@ -125,21 +123,21 @@ func restore(ctx context.Context, t *testing.T, c *envconf.Config, mcpName strin
 		return ctx
 	}
 	// verify nginx has been completely removed
-	if err := wait.For(conditions.New(mcpConfig.Client().Resources()).ResourceDeleted(ns)); err != nil {
+	if err := wait.For(conditions.New(mcp.Client().Resources()).ResourceDeleted(ns)); err != nil {
 		t.Error(err)
 	}
 	// restore from backup
-	restore, err := resources.CreateObjectsFromDir(ctx, mcpConfig.WithNamespace("velero"), "mcp/restore")
+	restore, err := resources.CreateObjectsFromDir(ctx, mcp.WithNamespace("velero"), "mcp/restore")
 	if err != nil {
 		t.Error(err)
 		return ctx
 	}
 	// verify restore has been successful
-	if err := wait.For(openmcpconditions.Status(&restore.Items[0], mcpConfig, "phase", "Completed")); err != nil {
+	if err := wait.For(openmcpconditions.Status(&restore.Items[0], mcp, "phase", "Completed")); err != nil {
 		t.Error(err)
 	}
 	// verify nginx deployment has been restored
-	if err := wait.For(conditions.New(mcpConfig.Client().Resources().WithNamespace("nginx-example")).
+	if err := wait.For(conditions.New(mcp.Client().Resources().WithNamespace("nginx-example")).
 		DeploymentAvailable("nginx-deployment", "nginx-example")); err != nil {
 		t.Error(err)
 		return ctx
@@ -148,8 +146,8 @@ func restore(ctx context.Context, t *testing.T, c *envconf.Config, mcpName strin
 }
 
 func backup(ctx context.Context, t *testing.T, c *envconf.Config, mcpName, setupFolder string) context.Context {
-	mcpPrefix := retrieveMCPClusterPrefix(ctx, t, c, mcpName)
-	mcp, err := clusterutils.ConfigByPrefix(mcpPrefix, "velero")
+	mcp, err := clusterutils.MCPConfig(ctx, c, mcpName)
+	mcp.WithNamespace("velero")
 	if err != nil {
 		t.Error(err)
 		return ctx
@@ -197,28 +195,4 @@ func backup(ctx context.Context, t *testing.T, c *envconf.Config, mcpName, setup
 		t.Error(err)
 	}
 	return ctx
-}
-
-func retrieveMCPClusterPrefix(ctx context.Context, t *testing.T, platformCluster *envconf.Config, mcpName string) string {
-	cr := &clustersv1alpha1.ClusterRequest{}
-	u := &unstructured.UnstructuredList{}
-	u.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "clusters.openmcp.cloud",
-		Version: "v1alpha1",
-		Kind:    "ClusterRequest",
-	})
-	if err := platformCluster.Client().Resources().List(ctx, u); err != nil {
-		t.Error(err)
-		return ""
-	}
-	for _, item := range u.Items {
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, cr); err != nil {
-			t.Error(err)
-			return ""
-		}
-		if cr.GetName() == mcpName {
-			return cr.Status.Cluster.Name
-		}
-	}
-	return ""
 }
