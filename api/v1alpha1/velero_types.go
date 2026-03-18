@@ -38,7 +38,7 @@ const (
 	Unknown     InstancePhase = "Unknown"
 
 	ManagedControlPlane ResourceLocation = "ManagedControlPlane"
-	WorkloadCluter      ResourceLocation = "WorkloadCluster"
+	WorkloadCluster     ResourceLocation = "WorkloadCluster"
 )
 
 // VeleroSpec defines the desired state of Velero

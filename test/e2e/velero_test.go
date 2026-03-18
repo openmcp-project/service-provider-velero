@@ -36,7 +36,7 @@ func TestServiceProvider(t *testing.T) {
 		}).
 		Setup(providers.CreateMCP("test-aws-a")).
 		Setup(providers.CreateMCP("test-aws-b")).
-		Assess("verify service can be successfylly consumed", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+		Assess("verify service can be successfully consumed", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			onboardingConfig, err := clusterutils.OnboardingConfig()
 			if err != nil {
 				t.Error(err)
