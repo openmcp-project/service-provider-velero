@@ -166,7 +166,13 @@ func resultsToResources(ctx context.Context, results []resources.Result) ([]apiv
 		})
 		if res.Error != nil {
 			containsError = true
-			l.Error(res.Error, "objectID", objectutils.ObjectID(obj))
+			l.Error(res.Error, "reconcile error",
+				"objectID", objectutils.ObjectID(obj),
+				"kind", reflect.TypeOf(obj).Elem().Name(),
+				"name", obj.GetName(),
+				"namespace", obj.GetNamespace(),
+				"cluster", res.Cluster.GetClusterType(),
+			)
 		}
 	}
 	return resources, containsError
