@@ -34,6 +34,8 @@ Platform Cluster                  Workload Cluster              ManagedControlPl
 
 The Velero server runs on the **workload cluster**, while the Velero CRDs (Backup, Restore, Schedule, etc.) are installed on the **ManagedControlPlane** for tenant isolation.
 
+> 📡 **Note:** The Kubernetes nodes on the workload cluster where Velero runs must be able to resolve and reach any configured [backup storage locations](https://velero.io/docs/main/locations/).
+
 ## 🚦 Getting Started
 
 ### Prerequisites
@@ -131,8 +133,6 @@ spec:
   imagePullSecrets:
     - name: harbor-credentials
 ```
-
-> 📡 **Note:** The Kubernetes nodes on the workload cluster where Velero runs must be able to resolve and reach any configured [backup storage locations](https://velero.io/docs/main/locations/).
 
 ## 🔧 Development Tasks
 
