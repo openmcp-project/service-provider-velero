@@ -1,6 +1,15 @@
-apiVersion: foo.services.openmcp.cloud/v1alpha1
+apiVersion: velero.services.openmcp.cloud/v1alpha1
 kind: ProviderConfig
 metadata:
-  name: default
+  name: velero
 spec:
   pollInterval: 1m
+  availableImages:
+    - name: velero
+      versions: ["v1.17.2", "v1.16.2"]
+      image: "velero/velero"
+    - name: aws
+      versions: ["v1.13.2", "v1.12.2"]
+      image: "velero/velero-plugin-for-aws"
+  imagePullSecrets:
+    - name: test

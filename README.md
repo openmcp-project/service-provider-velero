@@ -1,76 +1,168 @@
-[![REUSE status](https://api.reuse.software/badge/github.com/openmcp-project/service-provider-template)](https://api.reuse.software/info/github.com/openmcp-project/service-provider-template)
+[![REUSE status](https://api.reuse.software/badge/github.com/openmcp-project/service-provider-velero)](https://api.reuse.software/info/github.com/openmcp-project/service-provider-velero)
 
-# service-provider-template
+# 🛡️ service-provider-velero
 
-## About this project
+A service provider for managing [Velero](https://velero.io/) backup and restore capabilities within a ManagedControlPlane environment. This provider enables disaster recovery and data protection by automatically installing and configuring Velero on workload clusters.
 
-A template for building @openmcp-project Service Providers
+## 📖 Overview
 
-## Requirements and Setup
+The Velero service provider automates the lifecycle management of Velero installations, including:
 
-1. Create a new repository based on this template.
-2. Execute the template to create a new `ServiceProvider`.
-3. Test your `ServiceProvider`.
+- 💾 **Backup & Restore** - Deploys Velero server for Kubernetes backup and disaster recovery
+- 🔌 **Plugin Support** - Install cloud provider plugins (AWS, Azure, GCP, etc.)
+- 🔐 **Air-Gapped Support** - Full support for private registries and air-gapped environments
+- 🔄 **Drift Detection** - Automatic reconciliation with configurable poll intervals
+- 📊 **Status Tracking** - Real-time status reporting of all managed resources
 
-The template includes a basic code generation command that lets you create a `ServiceProvider` for your Go module, API kind and group.
-You can also choose to add sample code to get a fully functional `ServiceProvider`.
+## 🏗️ Architecture
 
-For a complete usage overview with the default settings, run:
-
-```shell
-go run ./cmd/template -h
+```
+Platform Cluster                  Workload Cluster              ManagedControlPlane
+┌──────────────────────────┐     ┌────────────────────┐       ┌────────────────────┐
+│  openmcp-system          │     │  Tenant Namespace  │       │  velero            │
+│  ┌────────────────────┐  │     │  ┌──────────────┐  │       │  ┌──────────────┐  │
+│  │ service-provider-  │  │     │  │ Velero       │  │       │  │ Velero CRDs  │  │
+│  │ velero             │──┼────▶│  │ Server       │──┼──────▶│  │ (Backup,     │  │
+│  │                    │──┼─────┼──┼──────────────┼──┼──────▶│  │  Restore...) │  │
+│  └────────────────────┘  │     │  │ + Plugins    │  │       │  └──────────────┘  │
+│  ┌────────────────────┐  │     │  └──────────────┘  │       └────────────────────┘
+│  │ ProviderConfig     │  │     └────────────────────┘
+│  │ imagePullSecrets   │  │
+│  └────────────────────┘  │
+└──────────────────────────┘
 ```
 
-Then execute the template, for example:
+The Velero server runs on the **workload cluster**, while the Velero CRDs (Backup, Restore, Schedule, etc.) are installed on the **ManagedControlPlane** for tenant isolation.
 
-```shell
-go run ./cmd/template -module github.com/yourorg/yourrepo -kind YourKind -group yourgroup
-```
+> 📡 **Note:** The Kubernetes nodes on the workload cluster where Velero runs must be able to resolve and reach any configured [backup storage locations](https://velero.io/docs/main/locations/).
 
-Running End-to-End tests:
+## 🚦 Getting Started
 
-```shell
+### Prerequisites
+
+- Go 1.21+
+- [Task](https://taskfile.dev/) (task runner)
+- Docker (for building images)
+- Access to an openMCP environment
+
+### 🧪 Running End-to-End Tests
+
+```bash
 task test-e2e
 ```
 
-## CLI Flags
+This uses the [openmcp-testing](https://github.com/openmcp-project/openmcp-testing) framework to spin up a full test environment.
 
-### Template Generator Flags
+## 📝 API Reference
 
-The template generator (`cmd/template`) supports the following flags:
+### Velero
 
-- `-module`: Go module path (default: `github.com/openmcp-project/service-provider-template`)
-- `-kind`: GVK kind name (default: `FooService`)
-- `-group`: GVK group prefix, will be suffixed with `services.openmcp.cloud` (default: `foo`)
-- `-v`: Generate with sample code (default: `false`)
+The `Velero` resource represents a Velero installation for a ManagedControlPlane.
 
-### Service Provider Runtime Flags
+```yaml
+apiVersion: velero.services.openmcp.cloud/v1alpha1
+kind: Velero
+metadata:
+  name: my-velero
+  namespace: default
+spec:
+  version: "v1.17.2"
+  plugins:
+    - name: "aws"
+      version: "v1.13.2"
+```
 
-The generated service provider supports the following runtime flags:
+| Field | Type | Description |
+|-------|------|-------------|
+| `spec.version` | string | The version of Velero to install |
+| `spec.plugins` | []Plugin | List of plugins to install with Velero |
+| `spec.plugins[].name` | string | Plugin name (e.g., `aws`, `azure`, `gcp`) |
+| `spec.plugins[].version` | string | Plugin version |
 
-- `--verbosity`: Logging verbosity level (see [controller-runtime logging](https://github.com/kubernetes-sigs/controller-runtime/blob/main/TMP-LOGGING.md))
-- `--environment`: Name of the environment (required for operation)
-- `--provider-name`: Name of the provider resource (required for operation)
-- `--metrics-bind-address`: Address for the metrics endpoint (default: `0`, use `:8443` for HTTPS or `:8080` for HTTP)
-- `--health-probe-bind-address`: Address for health probe endpoint (default: `:8081`)
-- `--leader-elect`: Enable leader election for controller manager (default: `false`)
-- `--metrics-secure`: Serve metrics endpoint securely via HTTPS (default: `true`)
-- `--enable-http2`: Enable HTTP/2 for metrics and webhook servers (default: `false`)
+### ProviderConfig
 
-For a complete list of available flags, run the generated binary with `-h` or `--help`.
+The `ProviderConfig` resource configures global settings for all Velero deployments.
 
-## Support, Feedback, Contributing
+```yaml
+apiVersion: velero.services.openmcp.cloud/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: velero
+spec:
+  pollInterval: 15m
+  availableImages:
+    - name: velero
+      versions: ["v1.17.2", "v1.16.2"]
+      image: "velero/velero"
+    - name: aws
+      versions: ["v1.13.2", "v1.12.2"]
+      image: "velero/velero-plugin-for-aws"
+  imagePullSecrets:
+    - name: privateregcred
+```
 
-This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/openmcp-project/service-provider-template/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
+| Field | Type | Description |
+|-------|------|-------------|
+| `spec.pollInterval` | duration | How often to reconcile and refresh service account tokens |
+| `spec.availableImages` | []Image | Allowed Velero and plugin images with their versions |
+| `spec.availableImages[].name` | string | Image identifier (`velero` or plugin name) |
+| `spec.availableImages[].versions` | []string | Allowed versions for this image |
+| `spec.availableImages[].image` | string | Container image reference |
+| `spec.imagePullSecrets` | []SecretRef | Secrets for private registry authentication |
 
-## Security / Disclosure
+> ⚠️ **Note:** Only one ProviderConfig may exist per Velero service provider instance, and its name must match the service provider's name.
 
-If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/openmcp-project/service-provider-template/security/policy) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
+## 🔐 Air-Gapped Environments
 
-## Code of Conduct
+For air-gapped or enterprise environments, configure private registries via ProviderConfig:
+
+```yaml
+apiVersion: velero.services.openmcp.cloud/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: velero
+spec:
+  pollInterval: 15m
+  availableImages:
+    - name: velero
+      versions: ["v1.17.2"]
+      image: "harbor.internal/velero/velero"
+    - name: aws
+      versions: ["v1.13.2"]
+      image: "harbor.internal/velero/velero-plugin-for-aws"
+  imagePullSecrets:
+    - name: harbor-credentials
+```
+
+## 🔧 Development Tasks
+
+| Command | Description |
+|---------|-------------|
+| `task build` | Build the binary |
+| `task build:img:build-test` | Build the container image |
+| `task test` | Run unit tests |
+| `task test-e2e` | Run end-to-end tests |
+| `task generate` | Generate CRDs and code after API changes |
+| `task validate` | Run linters and formatters |
+
+## 📚 Additional Resources
+
+- [Velero Documentation](https://velero.io/docs/)
+- [Velero API Types](https://velero.io/docs/main/api-types/)
+- [openMCP Project](https://github.com/openmcp-project)
+
+## 🤝 Support, Feedback, Contributing
+
+This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/openmcp-project/service-provider-velero/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
+
+## 🔒 Security / Disclosure
+
+If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/openmcp-project/service-provider-velero/security/policy) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
+
+## 📜 Code of Conduct
 
 We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience for everyone. By participating in this project, you agree to abide by its [Code of Conduct](https://github.com/SAP/.github/blob/main/CODE_OF_CONDUCT.md) at all times.
 
-## Licensing
+## 📄 Licensing
 
-Copyright 2025 SAP SE or an SAP affiliate company and service-provider-template contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/openmcp-project/service-provider-template).
+Copyright 2025 SAP SE or an SAP affiliate company and service-provider-velero contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/openmcp-project/service-provider-velero).

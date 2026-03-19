@@ -19,24 +19,44 @@ package v1alpha1
 import (
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // ProviderConfigSpec defines the desired state of ProviderConfig
 type ProviderConfigSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// foo is an example field of ProviderConfig. Edit providerconfig_types.go to remove/update
+	// PollInterval defines the default requeue time to detect drift
 	// +optional
 	// +kubebuilder:default:="1m"
 	// +kubebuilder:validation:Format=duration
 	PollInterval *metav1.Duration `json:"pollInterval,omitempty"`
+	// ImagePullSecrets is an optional list of references to secrets in the same
+	// namespace to use for pulling any of the images used by the velero deployment. If
+	// specified, these secrets will be passed to individual puller implementations
+	// for them to use. More info:
+	// https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
+	// LocalObjectReference contains enough information to let you locate the
+	// referenced object inside the same namespace.
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	// AvailableImages defines the images that can be used
+	// +required
+	AvailableImages []AvailableVeleroImages `json:"availableImages"`
+}
+
+// AvailableVeleroImages defines the velero images that are available as part of the managed velero offering.
+type AvailableVeleroImages struct {
+	// Name of the component (velero itself or a velero plugin)
+	// +required
+	Name string `json:"name"`
+	// Versions of component.
+	// +required
+	Versions []string `json:"versions"`
+	// Image location of the component
+	// +required
+	Image string `json:"image"`
 }
 
 // ProviderConfigStatus defines the observed state of ProviderConfig.
@@ -98,6 +118,5 @@ func init() {
 
 // PollInterval returns the poll interval duration from the spec.
 func (o *ProviderConfig) PollInterval() time.Duration {
-	// TODO pollInterval has to be required
 	return o.Spec.PollInterval.Duration
 }

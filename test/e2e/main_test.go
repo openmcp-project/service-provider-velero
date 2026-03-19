@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 
@@ -22,27 +21,26 @@ func TestMain(m *testing.M) {
 		Namespace: "openmcp-system",
 		Operator: setup.OpenMCPOperatorSetup{
 			Name:         "openmcp-operator",
-			Image:        "ghcr.io/openmcp-project/images/openmcp-operator:v0.17.1",
+			Image:        "ghcr.io/openmcp-project/images/openmcp-operator:v0.18.1",
 			Environment:  "debug",
 			PlatformName: "platform",
 		},
 		ClusterProviders: []providers.ClusterProviderSetup{
 			{
 				Name:  "kind",
-				Image: "ghcr.io/openmcp-project/images/cluster-provider-kind:v0.0.15",
+				Image: "ghcr.io/openmcp-project/images/cluster-provider-kind:v0.2.0",
 			},
 		},
 		ServiceProviders: []providers.ServiceProviderSetup{
 			{
-				Name:  "foo",
-				Image: "controller:latest",
+				Name:               "velero",
+				Image:              "ghcr.io/openmcp-project/images/service-provider-velero:0.0.1",
+				LoadImageToCluster: true,
 			},
 		},
 	}
 	testenv = env.NewWithConfig(envconf.New().WithNamespace(openmcp.Namespace))
-	if err := openmcp.Bootstrap(testenv); err != nil {
-		panic(fmt.Errorf("openmcp bootstrap failed: %v", err))
-	}
+	openmcp.Bootstrap(testenv)
 	os.Exit(testenv.Run(m))
 }
 
