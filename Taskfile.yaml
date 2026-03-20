@@ -6,7 +6,7 @@ vars:
   MANIFEST_OUT: '{{.ROOT_DIR}}/api/crds/manifests'
   CODE_DIRS: '{{.ROOT_DIR}}/cmd/... {{.ROOT_DIR}}/internal/... {{.ROOT_DIR}}/api/v1alpha1/... {{.ROOT_DIR}}/pkg/...'
   COMPONENTS: 'service-provider-velero'
-  REPO_NAME: 'https://github.com/openmcp-project/service-provider-velero'
+  REPO_URL: 'https://github.com/openmcp-project/service-provider-velero'
 
 includes:
   shared:
