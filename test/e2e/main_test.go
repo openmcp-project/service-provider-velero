@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 		ServiceProviders: []providers.ServiceProviderSetup{
 			{
 				Name:               "velero",
-				Image:              "ghcr.io/openmcp-project/images/service-provider-velero:v0.1.1",
+				Image:              "ghcr.io/openmcp-project/images/service-provider-velero:v0.1.2",
 				LoadImageToCluster: true,
 			},
 		},
