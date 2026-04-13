@@ -93,6 +93,7 @@ func TestConfigure(t *testing.T) {
 					assert.NoError(t, tt.platformCluster.Client().Get(context.TODO(), client.ObjectKeyFromObject(sourceSecret), sourceSecret))
 					assert.NoError(t, tt.workloadCluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(targetSecret), targetSecret))
 					assert.Equal(t, sourceSecret.Data, targetSecret.Data)
+					assert.Equal(t, corev1.SecretTypeDockerConfigJson, targetSecret.Type, "secret type should be preserved")
 				}
 			}
 		})
