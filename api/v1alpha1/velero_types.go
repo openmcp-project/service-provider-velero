@@ -20,6 +20,7 @@ import (
 	commonapi "github.com/openmcp-project/openmcp-operator/api/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // InstancePhase is a custom type representing the phase of a service instance.
@@ -114,7 +115,10 @@ type VeleroList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&Velero{}, &VeleroList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(GroupVersion, &Velero{}, &VeleroList{})
+		return nil
+	})
 }
 
 // Finalizer returns the finalizer string for the Velero resource
