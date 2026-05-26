@@ -32,6 +32,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
+
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
@@ -48,6 +50,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		manager         resources.Manager
 		want            ctrl.Result
 		wantErr         bool
+		wantIgnoreError bool
 		wantStatusPhase string
 	}{
 		{
@@ -182,9 +185,10 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					Image:    "velero/aws",
 				},
 			}),
-			clusters: fakeClusterContext(t),
-			want:     ctrl.Result{},
-			wantErr:  true,
+			clusters:        fakeClusterContext(t),
+			want:            ctrl.Result{},
+			wantErr:         false,
+			wantIgnoreError: true,
 		},
 		{
 			name: "Plugin version not available -> error",
@@ -205,9 +209,10 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					Image:    "velero/aws",
 				},
 			}),
-			clusters: fakeClusterContext(t),
-			want:     ctrl.Result{},
-			wantErr:  true,
+			clusters:        fakeClusterContext(t),
+			want:            ctrl.Result{},
+			wantErr:         false,
+			wantIgnoreError: true,
 		},
 	}
 	for _, tt := range tests {
@@ -222,6 +227,13 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 				},
 			}
 			got, gotErr := r.CreateOrUpdate(context.Background(), tt.obj, tt.pc, tt.clusters)
+			if tt.wantIgnoreError {
+				assert.NoError(t, gotErr)
+				assert.Nil(t, ctrlerrors.IgnoreInvalidUserInput(gotErr))
+				assert.NotEmpty(t, tt.obj.Status.Conditions)
+				assert.Contains(t, tt.obj.Status.Conditions[0].Message, "requested version is not available")
+				return
+			}
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("CreateOrUpdate() failed: %v", gotErr)
