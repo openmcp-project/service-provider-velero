@@ -32,6 +32,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
+	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
 
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
@@ -64,7 +65,7 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		spruntime.StatusProgressing(obj, "ReconcileError", err.Error())
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results := mgr.Apply(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
@@ -86,7 +87,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		spruntime.StatusProgressing(obj, "ReconcileError", err.Error())
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results := mgr.Delete(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
@@ -112,7 +113,7 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	// ensure that all images are available for the requested velero and plugin versions
 	images := resolveImages(obj.Spec, *pc)
 	if images == nil {
-		return nil, errors.New("requested version is not available")
+		return nil, fmt.Errorf("%w: requested version is not available", ctrlerrors.ErrInvalidUserInput)
 	}
 	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster, clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluster)
 	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster, clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
