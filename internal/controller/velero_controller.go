@@ -34,6 +34,9 @@ import (
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
 
+	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
+	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider/clusteraccess"
+
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/authz"
@@ -44,7 +47,6 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/objectutils"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/openmcp-project/service-provider-velero/pkg/secret"
-	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 )
 
 // VeleroReconciler reconciles a Velero object
@@ -60,33 +62,33 @@ type VeleroReconciler struct {
 }
 
 // CreateOrUpdate is called on every add or update event
-func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
-	spruntime.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
+	serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
-		spruntime.StatusProgressing(obj, "ReconcileError", err.Error())
+		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results := mgr.Apply(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
 	obj.Status.Resources = managedResources
 	if allResourcesReady(managedResources) {
-		spruntime.StatusReady(obj)
+		serviceprovider.StatusReady(obj)
 	}
 	if resultContainsErrors {
 		resultWithErrors := errors.New("resources contain reconcile errors")
-		spruntime.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
+		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
 	return ctrl.Result{}, nil
 }
 
 // Delete is called on every delete event
-func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (ctrl.Result, error) {
-	spruntime.StatusTerminating(obj)
+func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
+	serviceprovider.StatusTerminating(obj)
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
-		spruntime.StatusProgressing(obj, "ReconcileError", err.Error())
+		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results := mgr.Delete(ctx)
@@ -97,7 +99,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	}
 	if resultContainsErrors {
 		resultWithErrors := errors.New("resources contain reconcile errors")
-		spruntime.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
+		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
 	return ctrl.Result{
@@ -105,7 +107,7 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 	}, nil
 }
 
-func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters spruntime.ClusterContext) (resources.Manager, error) {
+func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (resources.Manager, error) {
 	err := r.ensureInstanceID(ctx, obj)
 	if err != nil {
 		return nil, err

@@ -30,6 +30,7 @@ import (
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	crdutil "github.com/openmcp-project/controller-utils/pkg/crds"
 	"github.com/openmcp-project/controller-utils/pkg/logging"
+	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	openmcpconst "github.com/openmcp-project/openmcp-operator/api/constants"
 	providerv1alpha1 "github.com/openmcp-project/openmcp-operator/api/provider/v1alpha1"
@@ -55,7 +56,6 @@ import (
 
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 
 	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/internal/controller"
@@ -312,13 +312,12 @@ func main() {
 		os.Exit(1)
 	}
 	providerConfigUpdates := make(chan event.GenericEvent)
-	spr := spruntime.NewSPReconciler[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig](
-		func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} },
-	).
-		WithPlatformCluster(platformCluster).
-		WithOnboardingCluster(onboardingCluster).
-		WithWorkloadCluster(true).
-		WithServiceProviderReconciler(&controller.VeleroReconciler{
+	spr := serviceprovider.NewAPIReconcilerBuilder[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig]().
+		EmptyObjectProvider(func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} }).
+		PlatformCluster(platformCluster).
+		OnboardingCluster(onboardingCluster).
+		WorkloadCluster(true).
+		Reconciler(&controller.VeleroReconciler{
 			OnboardingCluster: onboardingCluster,
 			PlatformCluster:   platformCluster,
 			PodNamespace:      podNamespace,
@@ -326,21 +325,23 @@ func main() {
 				return resources.NewManager(instance.GetID(obj))
 			},
 		}).
-		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
+		ClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
 			WithWorkloadScheme(workloadScheme).
 			WithRetryInterval(10 * time.Second).
 			WithMCPPermissions(mcpPermissions()).
-			WithWorkloadPermissions(workloadPermissions()))
+			WithWorkloadPermissions(workloadPermissions())).
+		MustBuild()
 	if err := spr.SetupWithManager(mgr, "velero", providerConfigUpdates); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}
-	pcr := spruntime.NewPCReconciler(providerName, func() *velerosv1alpha1.ProviderConfig {
-		return &velerosv1alpha1.ProviderConfig{}
-	}).
-		WithPlatformCluster(platformCluster).
-		WithUpdateChannel(providerConfigUpdates)
+	pcr := serviceprovider.NewConfigReconcilerBuilder[*velerosv1alpha1.ProviderConfig]().
+		EmptyObjectProvider(func() *velerosv1alpha1.ProviderConfig { return &velerosv1alpha1.ProviderConfig{} }).
+		ProviderName(providerName).
+		PlatformCluster(platformCluster).
+		UpdateChannel(providerConfigUpdates).
+		MustBuild()
 	if err := pcr.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
 		os.Exit(1)

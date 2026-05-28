@@ -34,9 +34,11 @@ import (
 
 	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
 
+	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
+	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider/clusteraccess"
+
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
@@ -46,7 +48,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		// Named input parameters for target function.
 		obj             *apiv1alpha1.Velero
 		pc              *apiv1alpha1.ProviderConfig
-		clusters        spruntime.ClusterContext
+		clusters        clusteraccess.ClusterContext
 		manager         resources.Manager
 		want            ctrl.Result
 		wantErr         bool
@@ -88,7 +90,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 				},
 			},
 			want:            ctrl.Result{},
-			wantStatusPhase: spruntime.StatusPhaseReady,
+			wantStatusPhase: serviceprovider.StatusPhaseReady,
 			wantErr:         false,
 		},
 		{
@@ -126,7 +128,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 				},
 			},
 			want:            ctrl.Result{},
-			wantStatusPhase: spruntime.StatusPhaseProgressing,
+			wantStatusPhase: serviceprovider.StatusPhaseProgressing,
 			wantErr:         false,
 		},
 		{
@@ -258,7 +260,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 		// Named input parameters for target function.
 		obj      *apiv1alpha1.Velero
 		pc       *apiv1alpha1.ProviderConfig
-		clusters spruntime.ClusterContext
+		clusters clusteraccess.ClusterContext
 		manager  resources.Manager
 		want     ctrl.Result
 		wantErr  bool
@@ -399,7 +401,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 				t.Fatal("Delete() succeeded unexpectedly")
 			}
 			assert.Equal(t, tt.want, got)
-			assert.Equal(t, spruntime.StatusPhaseTerminating, tt.obj.Status.Phase)
+			assert.Equal(t, serviceprovider.StatusPhaseTerminating, tt.obj.Status.Phase)
 		})
 	}
 }
@@ -501,9 +503,9 @@ func (f fakeManager) Delete(context.Context) []resources.Result {
 	return f.results
 }
 
-func fakeClusterContext(t *testing.T) spruntime.ClusterContext {
+func fakeClusterContext(t *testing.T) clusteraccess.ClusterContext {
 	t.Helper()
-	return spruntime.ClusterContext{
+	return clusteraccess.ClusterContext{
 		MCPCluster:      testutils.CreateFakeCluster(t, "mcp"),
 		WorkloadCluster: testutils.CreateFakeCluster(t, "workload"),
 	}
