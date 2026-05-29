@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -30,6 +31,7 @@ import (
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	crdutil "github.com/openmcp-project/controller-utils/pkg/crds"
 	"github.com/openmcp-project/controller-utils/pkg/logging"
+	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	openmcpconst "github.com/openmcp-project/openmcp-operator/api/constants"
 	providerv1alpha1 "github.com/openmcp-project/openmcp-operator/api/provider/v1alpha1"
@@ -51,15 +53,20 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	localaccess "github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider/clusteraccess"
+
 	"github.com/openmcp-project/service-provider-velero/api/crds"
 
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
-	"github.com/openmcp-project/service-provider-velero/pkg/spruntime"
 
 	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/internal/controller"
 	// +kubebuilder:scaffold:imports
+)
+
+const (
+	debugEnvVar = "DEV_DEBUG"
 )
 
 var (
@@ -248,9 +255,7 @@ func main() {
 	ctx := context.Background()
 	// init (job that installs CRDs)
 	if command == "init" {
-		onboardingCluster, err := clusterAccessManager.CreateAndWaitForCluster(ctx, "onboarding-init",
-			clustersv1alpha1.PURPOSE_ONBOARDING, onboardingScheme, adminPermissions)
-
+		onboardingCluster, err := requestOnboardingClusterAccess(ctx, clusterAccessManager, platformCluster, adminPermissions, "init")
 		if err != nil {
 			setupLog.Error(err, "Failed to create and wait for onboarding cluster access")
 		}
@@ -277,8 +282,7 @@ func main() {
 		return
 	}
 	// run (sp controller deployment)
-	onboardingCluster, err := clusterAccessManager.CreateAndWaitForCluster(ctx, "onboarding-run",
-		clustersv1alpha1.PURPOSE_ONBOARDING, onboardingScheme, adminPermissions)
+	onboardingCluster, err := requestOnboardingClusterAccess(ctx, clusterAccessManager, platformCluster, adminPermissions, "run")
 	if err != nil {
 		setupLog.Error(err, "Failed to create and wait for onboarding cluster access")
 	}
@@ -312,13 +316,12 @@ func main() {
 		os.Exit(1)
 	}
 	providerConfigUpdates := make(chan event.GenericEvent)
-	spr := spruntime.NewSPReconciler[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig](
-		func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} },
-	).
-		WithPlatformCluster(platformCluster).
-		WithOnboardingCluster(onboardingCluster).
-		WithWorkloadCluster(true).
-		WithServiceProviderReconciler(&controller.VeleroReconciler{
+	spr := serviceprovider.NewAPIReconcilerBuilder[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig]().
+		EmptyObjectProvider(func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} }).
+		PlatformCluster(platformCluster).
+		OnboardingCluster(onboardingCluster).
+		WorkloadCluster(true).
+		Reconciler(&controller.VeleroReconciler{
 			OnboardingCluster: onboardingCluster,
 			PlatformCluster:   platformCluster,
 			PodNamespace:      podNamespace,
@@ -326,21 +329,23 @@ func main() {
 				return resources.NewManager(instance.GetID(obj))
 			},
 		}).
-		WithClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
+		ClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
 			WithMCPScheme(mcpScheme).
 			WithWorkloadScheme(workloadScheme).
 			WithRetryInterval(10 * time.Second).
 			WithMCPPermissions(mcpPermissions()).
-			WithWorkloadPermissions(workloadPermissions()))
+			WithWorkloadPermissions(workloadPermissions())).
+		MustBuild()
 	if err := spr.SetupWithManager(mgr, "velero", providerConfigUpdates); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}
-	pcr := spruntime.NewPCReconciler(providerName, func() *velerosv1alpha1.ProviderConfig {
-		return &velerosv1alpha1.ProviderConfig{}
-	}).
-		WithPlatformCluster(platformCluster).
-		WithUpdateChannel(providerConfigUpdates)
+	pcr := serviceprovider.NewConfigReconcilerBuilder[*velerosv1alpha1.ProviderConfig]().
+		EmptyObjectProvider(func() *velerosv1alpha1.ProviderConfig { return &velerosv1alpha1.ProviderConfig{} }).
+		ProviderName(providerName).
+		PlatformCluster(platformCluster).
+		UpdateChannel(providerConfigUpdates).
+		MustBuild()
 	if err := pcr.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
 		os.Exit(1)
@@ -374,6 +379,36 @@ func initializePlatformCluster() (*clusters.Cluster, error) {
 		return nil, err
 	}
 	return platformCluster, nil
+}
+
+func requestOnboardingClusterAccess(ctx context.Context, mgr clusteraccess.Manager, platformCluster *clusters.Cluster, permissions []clustersv1alpha1.PermissionsRequest, cmdSuffix string) (*clusters.Cluster, error) {
+	cluster, err := mgr.CreateAndWaitForCluster(ctx, "onboarding-"+cmdSuffix,
+		clustersv1alpha1.PURPOSE_ONBOARDING, onboardingScheme, permissions)
+	if err != nil {
+		return cluster, err
+	}
+	if debugEnabled() {
+		return patchOnboardingClient(ctx, platformCluster, cluster, "onboarding-"+cmdSuffix)
+	}
+	return cluster, nil
+}
+
+func patchOnboardingClient(ctx context.Context, platformCluster *clusters.Cluster, onboardingCluster *clusters.Cluster, cmdSuffix string) (*clusters.Cluster, error) {
+	onboardingAr := &clustersv1alpha1.AccessRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusteraccess.StableRequestNameFromLocalName("fooservice.foo.services.open-control-plane.io", cmdSuffix),
+			Namespace: os.Getenv("POD_NAMESPACE"),
+		},
+	}
+	if err := platformCluster.Client().Get(ctx, client.ObjectKeyFromObject(onboardingAr), onboardingAr); err != nil {
+		return onboardingCluster, err
+	}
+	return localaccess.MustPatchClusterClient(ctx, onboardingAr, onboardingCluster), nil
+}
+
+func debugEnabled() bool {
+	v := strings.ToLower(os.Getenv(debugEnvVar))
+	return v == "1" || v == "true"
 }
 
 func mcpPermissions() []clustersv1alpha1.PermissionsRequest {
