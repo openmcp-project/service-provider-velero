@@ -60,7 +60,7 @@ This uses the [openmcp-testing](https://github.com/openmcp-project/openmcp-testi
 The `Velero` resource represents a Velero installation for a ManagedControlPlane.
 
 ```yaml
-apiVersion: velero.services.openmcp.cloud/v1alpha1
+apiVersion: velero.services.open-control-plane.io/v1alpha1
 kind: Velero
 metadata:
   name: my-velero
@@ -84,7 +84,7 @@ spec:
 The `ProviderConfig` resource configures global settings for all Velero deployments.
 
 ```yaml
-apiVersion: velero.services.openmcp.cloud/v1alpha1
+apiVersion: velero.services.open-control-plane.io/v1alpha1
 kind: ProviderConfig
 metadata:
   name: velero
@@ -117,7 +117,7 @@ spec:
 For air-gapped or enterprise environments, configure private registries via ProviderConfig:
 
 ```yaml
-apiVersion: velero.services.openmcp.cloud/v1alpha1
+apiVersion: velero.services.open-control-plane.io/v1alpha1
 kind: ProviderConfig
 metadata:
   name: velero
