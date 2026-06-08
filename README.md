@@ -8,16 +8,16 @@ A service provider for managing [Velero](https://velero.io/) backup and restore 
 
 [![Quality: Incubating](https://img.shields.io/badge/Quality-Incubating-3d9970?style=flat-square&labelColor=555)](https://open-control-plane.io/developers/serviceprovider/quality-criteria)
 
-| Criterion                         | Status  | Notes                                                                                                          |
-| --------------------------------- | :----:  | -------------------------------------------------------------------------------------------------------------- |
-| Deletion behaviour                |   ⚠️    | Finalizer is wired up; blocking deletion when Velero-managed CRs still exist is not verified.                  |
-| Status reporting & error messages |   ✅    |                                                                                                                |
-| Operation annotations             |   ❌    | `openmcp.cloud/operation` (pause / force-reconcile) annotations are not honoured.                              |
-| API stability policy              |   ✅    |                                                                                                                |
-| Custom CA support                 |   ❌    | Custom CA bundle propagation to Velero components is not implemented.                                          |
-| Release artifacts (image + OCM)   |   ✅    |                                                                                                                |
-| Testing                           |   ✅    |                                                                                                                |
-| Ownership and maintenance docs    |   ✅    |                                                                                                                |
+| Criterion                         | Status  | Notes                                                                                                                                                                                                                              |
+| --------------------------------- | :----:  | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deletion behaviour                |   ⚠️    | A finalizer ensures the Service Provider managed resources like `Deployments` etc. But there is no behaviour that ensures deletion is blocked if custom resources (e.g. Velero' `Backup` objects) in a `ControlPlane` still exist. |
+| Status reporting & error messages |   ✅    |                                                                                                                                                                                                                                    |
+| Operation annotations             |   ❌    | `openmcp.cloud/operation` (pause / force-reconcile) annotations are not honoured.                                                                                                                                                  |
+| API stability policy              |   ✅    |                                                                                                                                                                                                                                    |
+| Custom CA support                 |   ❌    | Custom CA bundle propagation to Velero components is not implemented.                                                                                                                                                              |
+| Release artifacts (image + OCM)   |   ✅    |                                                                                                                                                                                                                                    |
+| Testing                           |   ✅    |                                                                                                                                                                                                                                    |
+| Ownership and maintenance docs    |   ✅    |                                                                                                                                                                                                                                    |
 
 See the [OpenControlPlane Quality Criteria](https://open-control-plane.io/developers/serviceprovider/quality-criteria) for definitions.
 
@@ -89,12 +89,12 @@ spec:
       version: "v1.13.2"
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `spec.version` | string | The version of Velero to install |
-| `spec.plugins` | []Plugin | List of plugins to install with Velero |
-| `spec.plugins[].name` | string | Plugin name (e.g., `aws`, `azure`, `gcp`) |
-| `spec.plugins[].version` | string | Plugin version |
+| Field                    | Type     | Description                               |
+| ------------------------ | -------- | ----------------------------------------- |
+| `spec.version`           | string   | The version of Velero to install          |
+| `spec.plugins`           | []Plugin | List of plugins to install with Velero    |
+| `spec.plugins[].name`    | string   | Plugin name (e.g., `aws`, `azure`, `gcp`) |
+| `spec.plugins[].version` | string   | Plugin version                            |
 
 ### ProviderConfig
 
@@ -118,14 +118,14 @@ spec:
     - name: privateregcred
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `spec.pollInterval` | duration | How often to reconcile and refresh service account tokens |
-| `spec.availableImages` | []Image | Allowed Velero and plugin images with their versions |
-| `spec.availableImages[].name` | string | Image identifier (`velero` or plugin name) |
-| `spec.availableImages[].versions` | []string | Allowed versions for this image |
-| `spec.availableImages[].image` | string | Container image reference |
-| `spec.imagePullSecrets` | []SecretRef | Secrets for private registry authentication |
+| Field                             | Type        | Description                                               |
+| --------------------------------- | ----------- | --------------------------------------------------------- |
+| `spec.pollInterval`               | duration    | How often to reconcile and refresh service account tokens |
+| `spec.availableImages`            | []Image     | Allowed Velero and plugin images with their versions      |
+| `spec.availableImages[].name`     | string      | Image identifier (`velero` or plugin name)                |
+| `spec.availableImages[].versions` | []string    | Allowed versions for this image                           |
+| `spec.availableImages[].image`    | string      | Container image reference                                 |
+| `spec.imagePullSecrets`           | []SecretRef | Secrets for private registry authentication               |
 
 > ⚠️ **Note:** Only one ProviderConfig may exist per Velero service provider instance, and its name must match the service provider's name.
 
@@ -153,14 +153,14 @@ spec:
 
 ## 🔧 Development Tasks
 
-| Command | Description |
-|---------|-------------|
-| `task build` | Build the binary |
-| `task build:img:build-test` | Build the container image |
-| `task test` | Run unit tests |
-| `task test-e2e` | Run end-to-end tests |
-| `task generate` | Generate CRDs and code after API changes |
-| `task validate` | Run linters and formatters |
+| Command                     | Description                              |
+| --------------------------- | ---------------------------------------- |
+| `task build`                | Build the binary                         |
+| `task build:img:build-test` | Build the container image                |
+| `task test`                 | Run unit tests                           |
+| `task test-e2e`             | Run end-to-end tests                     |
+| `task generate`             | Generate CRDs and code after API changes |
+| `task validate`             | Run linters and formatters               |
 
 ## 📚 Additional Resources
 
