@@ -4,23 +4,6 @@
 
 A service provider for managing [Velero](https://velero.io/) backup and restore capabilities within a ManagedControlPlane environment. This provider enables disaster recovery and data protection by automatically installing and configuring Velero on workload clusters.
 
-## Quality Criteria
-
-[![Quality: Incubating](https://img.shields.io/badge/Quality-Incubating-3d9970?style=flat-square&labelColor=555)](https://open-control-plane.io/developers/serviceprovider/quality-criteria)
-
-| Criterion                         | Status  | Notes                                                                                                                                                                                                                              |
-| --------------------------------- | :----:  | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deletion behaviour                |   ⚠️    | A finalizer ensures the Service Provider managed resources like `Deployments` etc. are cleaned-up. But there is no behaviour that ensures deletion is blocked if custom resources (e.g. Velero' `Backup` objects) in a `ControlPlane` still exist. |
-| Status reporting & error messages |   ✅    |                                                                                                                                                                                                                                    |
-| Operation annotations             |   ❌    | `openmcp.cloud/operation` (pause / force-reconcile) annotations are not honoured.                                                                                                                                                  |
-| API stability policy              |   ✅    |                                                                                                                                                                                                                                    |
-| Custom CA support                 |   ❌    | Custom CA bundle propagation to Velero components is not implemented.                                                                                                                                                              |
-| Release artifacts (image + OCM)   |   ✅    |                                                                                                                                                                                                                                    |
-| Testing                           |   ✅    |                                                                                                                                                                                                                                    |
-| Ownership and maintenance docs    |   ✅    |                                                                                                                                                                                                                                    |
-
-See the [OpenControlPlane Quality Criteria](https://open-control-plane.io/developers/serviceprovider/quality-criteria) for definitions.
-
 ## 📖 Overview
 
 The Velero service provider automates the lifecycle management of Velero installations, including:
@@ -167,6 +150,23 @@ spec:
 - [Velero Documentation](https://velero.io/docs/)
 - [Velero API Types](https://velero.io/docs/main/api-types/)
 - [openMCP Project](https://github.com/openmcp-project)
+
+## Quality Criteria
+
+[![Quality: Incubating](https://img.shields.io/badge/Quality-Incubating-3d9970?style=flat-square&labelColor=555)](https://open-control-plane.io/developers/serviceprovider/quality-criteria)
+
+| Criterion                         | Status | Notes                                                                                                                                                                                                                                              |
+| --------------------------------- | :----: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deletion behaviour                |   ⚠️    | A finalizer ensures the Service Provider managed resources like `Deployments` etc. are cleaned-up. But there is no behaviour that ensures deletion is blocked if custom resources (e.g. Velero' `Backup` objects) in a `ControlPlane` still exist. |
+| Status reporting & error messages |   ✅    |                                                                                                                                                                                                                                                    |
+| Operation annotations             |   ⚠️    | `openmcp.cloud/operation: ignore` is processed by [opencontrolplane-runtime](https://github.com/openmcp-project/opencontrolplane-runtime). `openmcp.cloud/operation: reconcile` is not processed.                                                  |
+| API stability policy              |   ✅    |                                                                                                                                                                                                                                                    |
+| Custom CA support                 |   ❌    | Custom CA bundle propagation to Velero components is not implemented.                                                                                                                                                                              |
+| Release artifacts (image + OCM)   |   ✅    |                                                                                                                                                                                                                                                    |
+| Testing                           |   ✅    |                                                                                                                                                                                                                                                    |
+| Ownership and maintenance docs    |   ✅    |                                                                                                                                                                                                                                                    |
+
+See the [OpenControlPlane Quality Criteria](https://open-control-plane.io/developers/serviceprovider/quality-criteria) for definitions.
 
 ## 🤝 Support, Feedback, Contributing
 
