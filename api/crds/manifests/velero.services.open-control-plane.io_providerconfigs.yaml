@@ -5,28 +5,21 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
   labels:
-    openmcp.cloud/cluster: onboarding
-  name: veleroes.velero.services.openmcp.cloud
+    openmcp.cloud/cluster: platform
+  name: providerconfigs.velero.services.open-control-plane.io
 spec:
-  group: velero.services.openmcp.cloud
+  group: velero.services.open-control-plane.io
   names:
-    kind: Velero
-    listKind: VeleroList
-    plural: veleroes
-    singular: velero
-  scope: Namespaced
+    kind: ProviderConfig
+    listKind: ProviderConfigList
+    plural: providerconfigs
+    singular: providerconfig
+  scope: Cluster
   versions:
-  - additionalPrinterColumns:
-    - jsonPath: .status.phase
-      name: Phase
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Velero is the Schema for the veleros API
+        description: ProviderConfig is the Schema for the providerconfigs API
         properties:
           apiVersion:
             description: |-
@@ -46,35 +39,81 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of Velero
+            description: spec defines the desired state of ProviderConfig
             properties:
-              plugins:
-                description: Plugins that should be installed.
+              availableImages:
+                description: AvailableImages defines the images that can be used
                 items:
-                  description: VeleroPlugin defines a velero plugin
+                  description: AvailableVeleroImages defines the velero images that
+                    are available as part of the managed velero offering.
                   properties:
+                    image:
+                      description: Image location of the component
+                      type: string
                     name:
-                      description: The Velero plugin name.
+                      description: Name of the component (velero itself or a velero
+                        plugin)
                       type: string
-                    version:
-                      description: The Velero plugin version.
-                      type: string
+                    versions:
+                      description: Versions of component.
+                      items:
+                        type: string
+                      type: array
                   required:
+                  - image
                   - name
-                  - version
+                  - versions
                   type: object
                 type: array
-              version:
-                description: The Velero version.
+              imagePullSecrets:
+                description: |-
+                  ImagePullSecrets is an optional list of references to secrets in the same
+                  namespace to use for pulling any of the images used by the velero deployment. If
+                  specified, these secrets will be passed to individual puller implementations
+                  for them to use. More info:
+                  https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                items:
+                  description: |-
+                    LocalObjectReference contains enough information to let you locate the
+                    referenced object inside the same namespace.
+                  properties:
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              pollInterval:
+                default: 1m
+                description: PollInterval defines the default requeue time to detect
+                  drift
+                format: duration
                 type: string
             required:
-            - version
+            - availableImages
             type: object
           status:
-            description: status defines the observed state of Velero
+            description: status defines the observed state of ProviderConfig
             properties:
               conditions:
-                description: Conditions contains the conditions.
+                description: |-
+                  conditions represent the current state of the ProviderConfig resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -130,57 +169,9 @@ spec:
                   - type
                   type: object
                 type: array
-              observedGeneration:
-                description: ObservedGeneration is the generation of this resource
-                  that was last reconciled by the controller.
-                format: int64
-                type: integer
-              phase:
-                description: Phase is the current phase of the resource.
-                type: string
-              resources:
-                description: Resources managed by this velero instance
-                items:
-                  description: ManagedResource defines a kubernetes object with its
-                    lifecycle phase
-                  properties:
-                    apiGroup:
-                      description: |-
-                        APIGroup is the group for the resource being referenced.
-                        If APIGroup is not specified, the specified Kind must be in the core API group.
-                        For any other third-party types, APIGroup is required.
-                      type: string
-                    kind:
-                      description: Kind is the type of resource being referenced
-                      type: string
-                    location:
-                      description: ResourceLocation is a custom type representing
-                        the location of a resource.
-                      type: string
-                    message:
-                      type: string
-                    name:
-                      description: Name is the name of resource being referenced
-                      type: string
-                    namespace:
-                      description: |-
-                        Namespace is the namespace of resource being referenced
-                        Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.
-                        (Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
-                      type: string
-                    phase:
-                      description: InstancePhase is a custom type representing the
-                        phase of a service instance.
-                      type: string
-                  required:
-                  - kind
-                  - name
-                  - phase
-                  type: object
-                type: array
-            required:
-            - observedGeneration
-            - phase
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

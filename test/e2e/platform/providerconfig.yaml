@@ -1,4 +1,4 @@
-apiVersion: velero.services.openmcp.cloud/v1alpha1
+apiVersion: velero.services.open-control-plane.io/v1alpha1
 kind: ProviderConfig
 metadata:
   name: velero
