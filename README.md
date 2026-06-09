@@ -149,7 +149,7 @@ spec:
 
 - [Velero Documentation](https://velero.io/docs/)
 - [Velero API Types](https://velero.io/docs/main/api-types/)
-- [openMCP Project](https://github.com/openmcp-project)
+- [OpenControlPlane project](https://open-control-plane.io/)
 
 ## Quality Criteria
 
