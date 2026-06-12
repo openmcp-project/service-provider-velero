@@ -3,7 +3,7 @@ module github.com/openmcp-project/service-provider-velero
 go 1.26.4
 
 require (
-	github.com/openmcp-project/controller-utils v0.29.0
+	github.com/openmcp-project/controller-utils v0.29.1
 	github.com/openmcp-project/opencontrolplane-runtime v0.2.1
 	github.com/openmcp-project/openmcp-operator/api v0.20.0
 	github.com/openmcp-project/openmcp-operator/lib v0.20.0

@@ -137,8 +137,8 @@ github.com/onsi/ginkgo/v2 v2.29.0 h1:rfh+ZFjgJhYWRoIqVf3Uwx/W20yLrcrE2h2GmYVRaag
 github.com/onsi/ginkgo/v2 v2.29.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
 github.com/onsi/gomega v1.41.0 h1:OwKp4pXNgVxf6sCplzYo794OFNuoL2q2SBMU5NSWOjA=
 github.com/onsi/gomega v1.41.0/go.mod h1:M/Uqpu/8qTjtzCLUA2zJHX9Iilrau25x1PdoSRbWh5A=
-github.com/openmcp-project/controller-utils v0.29.0 h1:Ml1oAymrJPjT8LlN+10VnI8DHbROZmXpp+7vf3V7a3c=
-github.com/openmcp-project/controller-utils v0.29.0/go.mod h1:7azGGED2AIfqj+fD2T4NtxBJMk3UZxjRLNoBohFvxmo=
+github.com/openmcp-project/controller-utils v0.29.1 h1:GpqngwPdopOfNc6D2HY6Fx3B8/SnVa/VRew/IAGvmd4=
+github.com/openmcp-project/controller-utils v0.29.1/go.mod h1:JDq+Tqd+j0wUwQIqpoyuvpx1GXzqGKauxIa8oVmJJUQ=
 github.com/openmcp-project/opencontrolplane-runtime v0.2.1 h1:O43isRFmgvaIJSkp3Oy0A4fVHGTONMgrGXhd51rFAB8=
 github.com/openmcp-project/opencontrolplane-runtime v0.2.1/go.mod h1:PSAHcSqLxUoHRcWO9n1U69DaKbYoe4G3vtq9XoOjw/g=
 github.com/openmcp-project/openmcp-operator/api v0.20.0 h1:P+Li02EKsZxYdNtH14vjNTPS9zSAVbx40TpzvcEdhrw=
