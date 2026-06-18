@@ -29,7 +29,7 @@
       "groupName": "openmcp-project/build"
     },
     {
-      "description": "Update and automerge all components from openmcp-project immediately in one singe PR",
+      "description": "Update and automerge all components from openmcp-project immediately in one single PR",
       "matchManagers": [
         "gomod"
       ],
