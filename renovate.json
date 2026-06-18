@@ -16,11 +16,6 @@
   ],
   "packageRules": [
     {
-      "description": "Automerge submodule update",
-      "automerge": true,
-      "matchPackageNames": ["hack/common"]
-    },
-    {
       "description": "Group openmcp-project/build submodule and workflow updates",
       "matchDepNames": [
         "hack/common",
