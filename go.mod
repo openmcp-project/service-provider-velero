@@ -4,9 +4,9 @@ go 1.26.4
 
 require (
 	github.com/openmcp-project/controller-utils v0.30.0
-	github.com/openmcp-project/opencontrolplane-runtime v0.2.1
-	github.com/openmcp-project/openmcp-operator/api v0.20.0
-	github.com/openmcp-project/openmcp-operator/lib v0.20.0
+	github.com/openmcp-project/opencontrolplane-runtime v0.3.0
+	github.com/openmcp-project/openmcp-operator/api v1.0.1
+	github.com/openmcp-project/openmcp-operator/lib v1.0.1
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
