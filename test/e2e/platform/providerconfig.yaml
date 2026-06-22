@@ -3,7 +3,7 @@ kind: ProviderConfig
 metadata:
   name: velero
 spec:
-  pollInterval: 1m
+  pollInterval: 10s
   availableImages:
     - name: velero
       versions: ["v1.17.2", "v1.16.2"]
