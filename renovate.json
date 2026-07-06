@@ -1,5 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "git-submodules": {
+    "enabled": true
+  },
+  "gitIgnoredAuthors": [
+    "github-actions[bot]@users.noreply.github.com"
+  ],
   "extends": [
     "config:recommended",
     "config:best-practices",
@@ -8,9 +14,6 @@
     ":rebaseStalePrs",
     ":enableVulnerabilityAlerts"
   ],
-  "git-submodules": {
-    "enabled": true
-  },
   "postUpdateOptions": [
     "gomodTidy"
   ],
@@ -30,30 +33,37 @@
   ],
   "packageRules": [
     {
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "matchDepTypes": [
+        "golang"
+      ],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Group openmcp-project Go components",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/openmcp-project/*",
+        "openmcp-project/*"
+      ],
+      "groupName": "openmcp-project Go dependencies",
+      "minimumReleaseAge": "0 days",
+      "automerge": true
+    },
+    {
       "description": "Group openmcp-project/build submodule and workflow updates",
       "matchDepNames": [
         "hack/common",
         "openmcp-project/build"
       ],
       "groupName": "openmcp-project/build"
-    },
-    {
-      "description": "Update and automerge all components from openmcp-project immediately in one single PR",
-      "matchManagers": [
-        "gomod"
-      ],
-      "groupName": "openmcp-project Go dependencies",
-      "groupSlug": "openmcp-go-deps",
-      "automerge": true,
-      "automergeType": "pr",
-      "prPriority": 10,
-      "semanticCommitType": "chore",
-      "rebaseWhen": "auto",
-      "minimumReleaseAge": "0 days",
-      "enabled": true,
-      "matchPackageNames": [
-        "/^github.com/openmcp-project//"
-      ]
     }
   ]
 }
