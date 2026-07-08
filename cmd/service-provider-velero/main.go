@@ -314,6 +314,17 @@ func main() {
 		setupLog.Error(err, "unable to add platform cluster to manager")
 		os.Exit(1)
 	}
+
+	clusterAccessReconciler := clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
+		WithMCPScheme(mcpScheme).
+		WithWorkloadScheme(workloadScheme).
+		WithRetryInterval(10 * time.Second).
+		WithMCPPermissions(mcpPermissions()).
+		WithWorkloadPermissions(workloadPermissions())
+	if debugEnabled() {
+		clusterAccessReconciler = localaccess.NewLocalAccessReconciler(clusterAccessReconciler)
+	}
+
 	spr := serviceprovider.NewAPIReconcilerBuilder[*velerosv1alpha1.Velero, *velerosv1alpha1.ProviderConfig]().
 		EmptyObjectProvider(func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} }).
 		EmptyConfigProvider(func() *velerosv1alpha1.ProviderConfig { return &velerosv1alpha1.ProviderConfig{} }).
@@ -328,12 +339,7 @@ func main() {
 				return resources.NewManager(instance.GetID(obj))
 			},
 		}).
-		ClusterAccessReconciler(clusteraccess.NewClusterAccessReconciler(platformCluster.Client(), "velero").
-			WithMCPScheme(mcpScheme).
-			WithWorkloadScheme(workloadScheme).
-			WithRetryInterval(10 * time.Second).
-			WithMCPPermissions(mcpPermissions()).
-			WithWorkloadPermissions(workloadPermissions())).
+		ClusterAccessReconciler(clusterAccessReconciler).
 		MustBuild()
 	if err := spr.SetupWithManager(mgr, "velero"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
@@ -385,7 +391,7 @@ func requestOnboardingClusterAccess(ctx context.Context, mgr clusteraccess.Manag
 func patchOnboardingClient(ctx context.Context, platformCluster *clusters.Cluster, onboardingCluster *clusters.Cluster, cmdSuffix string) (*clusters.Cluster, error) {
 	onboardingAr := &clustersv1alpha1.AccessRequest{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusteraccess.StableRequestNameFromLocalName("fooservice.foo.services.open-control-plane.io", cmdSuffix),
+			Name:      clusteraccess.StableRequestNameFromLocalName("velero.velero.services.openmcp.cloud", cmdSuffix),
 			Namespace: os.Getenv("POD_NAMESPACE"),
 		},
 	}
