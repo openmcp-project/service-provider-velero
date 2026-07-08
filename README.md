@@ -168,6 +168,10 @@ spec:
 
 See the [OpenControlPlane Quality Criteria](https://open-control-plane.io/developers/serviceprovider/quality-criteria) for definitions.
 
+## Local Debugging Limitations
+
+Note that when [running the controller locally](https://open-control-plane.io/developers/serviceprovider/debugging#running-your-controller-locally) you need to temporarily patch the managed service account setup of package `authn` for the deployment on the workload cluster to become ready. Otherwise velero won't be able to connect to the control plane that it watches.
+
 ## 🤝 Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/openmcp-project/service-provider-velero/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
