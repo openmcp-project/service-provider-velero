@@ -341,7 +341,7 @@ func main() {
 		}).
 		ClusterAccessReconciler(clusterAccessReconciler).
 		MustBuild()
-	if err := spr.SetupWithManager(mgr, "velero"); err != nil {
+	if err := spr.SetupWithManager(mgr, providerName); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
 		os.Exit(1)
 	}
