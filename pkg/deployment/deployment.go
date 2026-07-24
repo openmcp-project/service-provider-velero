@@ -17,25 +17,27 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
+const veleroName = "velero"
+
 func getPodLabels(instance string) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":     "velero",
+		"app.kubernetes.io/name":     veleroName,
 		"app.kubernetes.io/instance": instance,
 	}
 }
 
 // Configure add a managed Velero server deployment to the given cluster.
-func Configure(cluster resources.ManagedCluster, namespace string, velero *v1alpha1.Velero, imagePullSecrets []corev1.LocalObjectReference, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
+func Configure(cluster resources.ManagedCluster, namespace string, obj *v1alpha1.Velero, imagePullSecrets []corev1.LocalObjectReference, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "velero",
+			Name:      veleroName,
 			Namespace: cluster.GetDefaultNamespace(),
 		},
 	}, resources.ManagedObjectContext{
 		ReconcileFunc: func(_ context.Context, o client.Object) error {
 			oDeploy := o.(*appsv1.Deployment)
 
-			labels := getPodLabels(instance.GetID(velero))
+			labels := getPodLabels(instance.GetID(obj))
 			for key, value := range labels {
 				metav1.SetMetaDataLabel(&oDeploy.ObjectMeta, key, value)
 			}
@@ -58,8 +60,8 @@ func Configure(cluster resources.ManagedCluster, namespace string, velero *v1alp
 						ImagePullSecrets:              slices.Clone(imagePullSecrets),
 						Containers: []corev1.Container{
 							{
-								Name:            "velero",
-								Image:           images["velero"],
+								Name:            veleroName,
+								Image:           images[veleroName],
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Command:         []string{"/velero"},
 								Args:            []string{"server"},
@@ -107,7 +109,7 @@ func Configure(cluster resources.ManagedCluster, namespace string, velero *v1alp
 				},
 			}
 
-			for i, plugin := range velero.Spec.Plugins {
+			for i, plugin := range obj.Spec.Plugins {
 				oDeploy.Spec.Template.Spec.InitContainers = append(oDeploy.Spec.Template.Spec.InitContainers, corev1.Container{
 					Name:            fmt.Sprintf("plugin-%d", i),
 					Image:           images[plugin.Name],
@@ -160,7 +162,7 @@ func ConfigureMcp(cluster resources.ManagedCluster, image string, instance strin
 	// we deploy a 0 scale deployment on the mcp
 	deployment := resources.NewManagedObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "velero",
+			Name:      veleroName,
 			Namespace: cluster.GetDefaultNamespace(),
 		},
 	}, resources.ManagedObjectContext{
@@ -184,7 +186,7 @@ func ConfigureMcp(cluster resources.ManagedCluster, image string, instance strin
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
 							{
-								Name:            "velero",
+								Name:            veleroName,
 								Image:           image,
 								ImagePullPolicy: corev1.PullIfNotPresent,
 							},
