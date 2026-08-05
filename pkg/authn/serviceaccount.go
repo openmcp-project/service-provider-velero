@@ -93,6 +93,11 @@ func (m *ManagedServiceAccount) kubeAPIAccess() string {
 	return fmt.Sprintf("kube-api-access-%s", m.Name)
 }
 
+// SecretRef returns a reference to the token secret created by this ManagedServiceAccount.
+func (m *ManagedServiceAccount) SecretRef() corev1.LocalObjectReference {
+	return corev1.LocalObjectReference{Name: m.kubeAPIAccess()}
+}
+
 // Configure adds a managed ServiceAccount object to the given MCP cluster and a managed Secret object to the given workload cluster.
 func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.ManagedCluster, pollInterval time.Duration) TokenApplyFunc {
 	// Add a service account on the remote cluster.

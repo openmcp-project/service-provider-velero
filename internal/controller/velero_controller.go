@@ -69,14 +69,17 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
-	results := mgr.Apply(ctx)
+	results, err := mgr.Apply(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
 	obj.Status.Resources = managedResources
-	if allResourcesReady(managedResources) {
+	if allResourcesReady(managedResources) && err == nil {
 		serviceprovider.StatusReady(obj)
 	}
-	if resultContainsErrors {
+	if resultContainsErrors || err != nil {
 		resultWithErrors := errors.New("resources contain reconcile errors")
+		if err != nil {
+			resultWithErrors = fmt.Errorf("%w: %w", resultWithErrors, err)
+		}
 		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
@@ -91,14 +94,17 @@ func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, 
 		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
-	results := mgr.Delete(ctx)
+	results, err := mgr.Delete(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
 	obj.Status.Resources = managedResources
-	if resources.AllDeleted(results) {
+	if resources.AllDeleted(results) && err == nil {
 		return ctrl.Result{}, nil
 	}
-	if resultContainsErrors {
+	if resultContainsErrors || err != nil {
 		resultWithErrors := errors.New("resources contain reconcile errors")
+		if err != nil {
+			resultWithErrors = fmt.Errorf("%w: %w", resultWithErrors, err)
+		}
 		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
@@ -147,6 +153,14 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	mgr := r.CreateManager(obj)
 	mgr.AddCluster(mcpCluster)
 	mgr.AddCluster(workloadCluster)
+
+	// create cleaner to remove orphaned pull secret copies from workload cluster
+	secretsToKeep := make([]corev1.LocalObjectReference, len(pc.Spec.ImagePullSecrets)+1)
+	copy(secretsToKeep, pc.Spec.ImagePullSecrets)
+	secretsToKeep[len(pc.Spec.ImagePullSecrets)] = mcpServiceAccount.SecretRef()
+	workloadSecretCleaner := secret.NewSecretCleaner(workloadCluster, workloadCluster.GetDefaultNamespace(), secretsToKeep)
+	mgr.AddCleaner(workloadSecretCleaner)
+
 	return mgr, nil
 }
 
