@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,10 +13,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	klientresources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
+
+	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
+	"github.com/openmcp-project/service-provider-velero/pkg/meta"
 
 	"github.com/openmcp-project/openmcp-testing/pkg/clusterutils"
 	openmcpconditions "github.com/openmcp-project/openmcp-testing/pkg/conditions"
@@ -85,6 +90,12 @@ func TestServiceProvider(t *testing.T) {
 		}).
 		Assess("verify aws-b restore", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			return restore(ctx, t, c, "test-aws-b")
+		}).
+		Assess("provider config update with new pull secret", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			return updateProviderConfigPullSecret(ctx, t, c)
+		}).
+		Assess("old pull secret is removed and new one is present on workload cluster", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			return verifyPullSecretRotation(ctx, t)
 		}).
 		Teardown(func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			onboardingConfig, err := clusterutils.OnboardingConfig()
@@ -193,6 +204,80 @@ func backup(ctx context.Context, t *testing.T, c *envconf.Config, mcpName, setup
 	// verify backup has been successful
 	if err := wait.For(openmcpconditions.Status(&backup.Items[0], mcp, "phase", "Completed")); err != nil {
 		t.Error(err)
+	}
+	return ctx
+}
+
+func updateProviderConfigPullSecret(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+	if err := velerosv1alpha1.AddToScheme(c.Client().Resources().GetScheme()); err != nil {
+		t.Errorf("failed to add api types to client scheme: %v", err)
+		return ctx
+	}
+	providerConfig := &velerosv1alpha1.ProviderConfig{}
+	providerConfig.SetName("velero")
+	if err := c.Client().Resources().Get(ctx, "velero", "openmcp-system", providerConfig); err != nil {
+		t.Errorf("failed to get provider config: %v", err)
+		return ctx
+	}
+	providerConfig.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "test-b"}}
+	if err := c.Client().Resources().Update(ctx, providerConfig); err != nil {
+		t.Errorf("failed to update provider config: %v", err)
+	}
+	// verify service stays healthy
+	onboardingConfig, err := clusterutils.OnboardingConfig()
+	velerosv1alpha1.AddToScheme(onboardingConfig.GetClient().Resources().GetScheme())
+	if err != nil {
+		t.Error(err)
+		return ctx
+	}
+	velero := &velerosv1alpha1.Velero{}
+	velero.SetName("test-aws-a")
+	velero.SetNamespace(corev1.NamespaceDefault)
+	if err := wait.For(openmcpconditions.Match(velero, onboardingConfig, "Ready", corev1.ConditionTrue), wait.WithTimeout(2*time.Minute)); err != nil {
+		t.Errorf("Velero not ready after provider config update: %v", err)
+	}
+	return ctx
+}
+
+func verifyPullSecretRotation(ctx context.Context, t *testing.T) context.Context {
+	workloadConfig, err := clusterutils.ConfigByPrefix("workload", "velero")
+	if err != nil {
+		t.Error(err)
+		return ctx
+	}
+	res := workloadConfig.Client().Resources()
+	labelSel := fmt.Sprintf("%s=%s", meta.LabelManagedBy, meta.LabelManagedByValue)
+	// wait until no test-a secrets exist
+	if err := wait.For(func(ctx context.Context) (bool, error) {
+		list := &corev1.SecretList{}
+		if err := res.List(ctx, list, klientresources.WithLabelSelector(labelSel)); err != nil {
+			return false, err
+		}
+		for _, s := range list.Items {
+			if s.Name == "test-a" {
+				return false, nil
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Errorf("expected pull secret test-a to be deleted from workload cluster: %v", err)
+		return ctx
+	}
+	// verify test-b secrets are present in all instance namespaces (one per MCP)
+	if err := wait.For(func(ctx context.Context) (bool, error) {
+		list := &corev1.SecretList{}
+		if err := res.List(ctx, list, klientresources.WithLabelSelector(labelSel)); err != nil {
+			return false, err
+		}
+		count := 0
+		for _, s := range list.Items {
+			if s.Name == "test-b" {
+				count++
+			}
+		}
+		return count == 2, nil
+	}); err != nil {
+		t.Errorf("expected 2 copies of pull secret test-b on workload cluster: %v", err)
 	}
 	return ctx
 }
