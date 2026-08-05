@@ -494,13 +494,17 @@ func (f fakeManager) AddCluster(mc resources.ManagedCluster) {
 }
 
 // Apply implements [resources.Manager].
-func (f fakeManager) Apply(context.Context) []resources.Result {
-	return f.results
+func (f fakeManager) Apply(context.Context) ([]resources.Result, error) {
+	return f.results, nil
 }
 
 // Delete implements [resources.Manager].
-func (f fakeManager) Delete(context.Context) []resources.Result {
-	return f.results
+func (f fakeManager) Delete(context.Context) ([]resources.Result, error) {
+	return f.results, nil
+}
+
+// AddCleaner implements [resources.Manager].
+func (f fakeManager) AddCleaner(oc resources.OrphanCleaner) {
 }
 
 func fakeClusterContext(t *testing.T) clusteraccess.ClusterContext {
