@@ -32,6 +32,11 @@ func CreateFakeCluster(t *testing.T, id string, clusterObjects ...client.Object)
 	return clusters.NewTestClusterFromClient(id, fakeClient)
 }
 
+// CreateFakeClusterFromClient sets up a cluster with the given client
+func CreateFakeClusterFromClient(id string, cl client.Client) *clusters.Cluster {
+	return clusters.NewTestClusterFromClient(id, cl)
+}
+
 // ExecApply sets up a manager for the provided clusters and invokes reconciliation of all managed objects
 func ExecApply(t *testing.T, clusters []resources.ManagedCluster, expectedManagedObjects int, wantErrors []string) []resources.Result {
 	t.Helper()
