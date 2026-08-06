@@ -225,15 +225,15 @@ func updateProviderConfigPullSecret(ctx context.Context, t *testing.T, c *envcon
 	}
 	// verify service stays healthy
 	onboardingConfig, err := clusterutils.OnboardingConfig()
-	velerosv1alpha1.AddToScheme(onboardingConfig.GetClient().Resources().GetScheme())
 	if err != nil {
 		t.Error(err)
 		return ctx
 	}
+	velerosv1alpha1.AddToScheme(onboardingConfig.GetClient().Resources().GetScheme())
 	velero := &velerosv1alpha1.Velero{}
 	velero.SetName("test-aws-a")
 	velero.SetNamespace(corev1.NamespaceDefault)
-	if err := wait.For(openmcpconditions.Match(velero, onboardingConfig, "Ready", corev1.ConditionTrue), wait.WithTimeout(2*time.Minute)); err != nil {
+	if err := wait.For(openmcpconditions.Match(velero, onboardingConfig, "Ready", corev1.ConditionTrue)); err != nil {
 		t.Errorf("Velero not ready after provider config update: %v", err)
 	}
 	return ctx
