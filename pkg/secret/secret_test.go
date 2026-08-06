@@ -111,8 +111,8 @@ func TestSecretCleaner_Cleanup(t *testing.T) {
 		targetNamespace string
 		secretsToKeep   []corev1.LocalObjectReference
 		wantSecrets     []string
-		wantResults     bool
-		wantErr         bool
+		wantDeleteErr   bool
+		wantListErr     bool
 	}{
 		{
 			name:            "only managed secrets are deleted",
@@ -150,7 +150,7 @@ func TestSecretCleaner_Cleanup(t *testing.T) {
 			targetNamespace: "velero",
 			cluster:         newFakeCluster(t, "velero", listErrClient{}),
 			secretsToKeep:   []corev1.LocalObjectReference{},
-			wantErr:         true,
+			wantListErr:     true,
 		},
 		{
 			name:            "result with error is returned when delete fails",
@@ -161,7 +161,7 @@ func TestSecretCleaner_Cleanup(t *testing.T) {
 				).Build(),
 			}),
 			secretsToKeep: []corev1.LocalObjectReference{},
-			wantResults:   true,
+			wantDeleteErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -174,14 +174,15 @@ func TestSecretCleaner_Cleanup(t *testing.T) {
 
 			results, err := c.Cleanup(context.Background())
 
-			if tt.wantErr {
+			if tt.wantListErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			if tt.wantResults {
-				assert.NotEmpty(t, results)
+			if tt.wantDeleteErr {
+				require.NotEmpty(t, results)
+				assert.Error(t, results[0].Error)
 				return
 			}
 			assert.Empty(t, results)
