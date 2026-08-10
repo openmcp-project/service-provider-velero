@@ -155,9 +155,7 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	mgr.AddCluster(workloadCluster)
 
 	// create cleaner to remove orphaned pull secret copies from workload cluster
-	secretsToKeep := make([]corev1.LocalObjectReference, len(pc.Spec.ImagePullSecrets)+1)
-	copy(secretsToKeep, pc.Spec.ImagePullSecrets)
-	secretsToKeep[len(pc.Spec.ImagePullSecrets)] = mcpServiceAccount.SecretRef()
+	secretsToKeep := append(slices.Clone(pc.Spec.ImagePullSecrets), mcpServiceAccount.SecretRef())
 	workloadSecretCleaner := secret.NewSecretCleaner(workloadCluster, workloadCluster.GetDefaultNamespace(), secretsToKeep)
 	mgr.AddCleaner(workloadSecretCleaner)
 
