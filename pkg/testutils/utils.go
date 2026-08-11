@@ -7,6 +7,7 @@ import (
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -31,6 +32,11 @@ func CreateFakeCluster(t *testing.T, id string, clusterObjects ...client.Object)
 	return clusters.NewTestClusterFromClient(id, fakeClient)
 }
 
+// CreateFakeClusterFromClient sets up a cluster with the given client
+func CreateFakeClusterFromClient(id string, cl client.Client) *clusters.Cluster {
+	return clusters.NewTestClusterFromClient(id, cl)
+}
+
 // ExecApply sets up a manager for the provided clusters and invokes reconciliation of all managed objects
 func ExecApply(t *testing.T, clusters []resources.ManagedCluster, expectedManagedObjects int, wantErrors []string) []resources.Result {
 	t.Helper()
@@ -39,7 +45,8 @@ func ExecApply(t *testing.T, clusters []resources.ManagedCluster, expectedManage
 	for _, cluster := range clusters {
 		mgr.AddCluster(cluster)
 	}
-	results := mgr.Apply(context.TODO())
+	results, err := mgr.Apply(context.TODO())
+	require.NoError(t, err)
 	return assertResult(t, results, expectedManagedObjects, wantErrors)
 }
 
@@ -51,7 +58,8 @@ func ExecDelete(t *testing.T, clusters []resources.ManagedCluster, expectedManag
 	for _, cluster := range clusters {
 		mgr.AddCluster(cluster)
 	}
-	results := mgr.Delete(context.TODO())
+	results, err := mgr.Delete(context.TODO())
+	require.NoError(t, err)
 	return assertResult(t, results, expectedManagedObjects, wantErrors)
 }
 
