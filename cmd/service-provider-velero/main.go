@@ -30,6 +30,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	crdutil "github.com/openmcp-project/controller-utils/pkg/crds"
+	"github.com/openmcp-project/controller-utils/pkg/fips"
 	"github.com/openmcp-project/controller-utils/pkg/logging"
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
@@ -109,6 +110,7 @@ func initWorkloadScheme() {
 
 // nolint:gocyclo
 func main() {
+	fips.Verify(context.Background())
 	var command string
 	var environment, providerName string
 	var metricsAddr string
