@@ -47,7 +47,7 @@ spec:
           emptyDir: {}
       containers:
         - name: minio
-          image: minio/minio:latest
+          image: quay.io/minio/minio:latest
           imagePullPolicy: IfNotPresent
           args:
             - server
@@ -105,7 +105,7 @@ spec:
           emptyDir: {}
       containers:
         - name: mc
-          image: minio/mc:latest
+          image: quay.io/minio/mc:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
