@@ -5,6 +5,7 @@
 package v1alpha1
 
 import (
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -259,10 +260,8 @@ func (in *VeleroStatus) DeepCopyInto(out *VeleroStatus) {
 	in.Status.DeepCopyInto(&out.Status)
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
-		*out = make([]ManagedResource, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		*out = make([]objectmanager.ManagedObject, len(*in))
+		copy(*out, *in)
 	}
 }
 

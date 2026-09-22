@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openmcp-project/service-provider-velero/api/v1alpha1"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 // CreateFakeCluster sets up a cluster with a fake client
@@ -38,39 +38,39 @@ func CreateFakeClusterFromClient(id string, cl client.Client) *clusters.Cluster 
 }
 
 // ExecApply sets up a manager for the provided clusters and invokes reconciliation of all managed objects
-func ExecApply(t *testing.T, clusters []resources.ManagedCluster, expectedManagedObjects int, wantErrors []string) []resources.Result {
+func ExecApply(t *testing.T, clusters []objectmanager.Cluster, expectedManagedObjects int, wantErrors []string) []objectmanager.Result {
 	t.Helper()
 	// invoke apply with manager
-	mgr := resources.NewManager("instance-id")
+	mgr := objectmanager.NewManager("instance-id")
 	for _, cluster := range clusters {
 		mgr.AddCluster(cluster)
 	}
 	results, err := mgr.Apply(context.TODO())
-	require.NoError(t, err)
-	return assertResult(t, results, expectedManagedObjects, wantErrors)
+	require.Equal(t, len(wantErrors) == 0, err == nil)
+	return assertResult(t, results.Results, expectedManagedObjects, wantErrors)
 }
 
 // ExecDelete sets up a manager for the provided clusters and invokes deletion of all managed objects
-func ExecDelete(t *testing.T, clusters []resources.ManagedCluster, expectedManagedObjects int, wantErrors []string) []resources.Result {
+func ExecDelete(t *testing.T, clusters []objectmanager.Cluster, expectedManagedObjects int, wantErrors []string) []objectmanager.Result {
 	t.Helper()
 	// invoke delete with manager
-	mgr := resources.NewManager("instance-id")
+	mgr := objectmanager.NewManager("instance-id")
 	for _, cluster := range clusters {
 		mgr.AddCluster(cluster)
 	}
 	results, err := mgr.Delete(context.TODO())
 	require.NoError(t, err)
-	return assertResult(t, results, expectedManagedObjects, wantErrors)
+	return assertResult(t, results.Results, expectedManagedObjects, wantErrors)
 }
 
-func assertResult(t *testing.T, results []resources.Result, expectedManagedObjects int, wantErrors []string) []resources.Result {
+func assertResult(t *testing.T, results []objectmanager.Result, expectedManagedObjects int, wantErrors []string) []objectmanager.Result {
 	t.Helper()
 	assert.Len(t, results, expectedManagedObjects, "expected %d managed object(s), got %d managed object(s)")
 	errcount := 0
 	for _, r := range results {
 		if r.Error != nil {
 			// assert that an error is expected
-			assert.Contains(t, wantErrors, r.Object.GetObject().GetName(), "unexpected reconcile error of managed object %s", r.Object.GetObject().GetName())
+			assert.Contains(t, wantErrors, r.Object.ClientObject().GetName(), "unexpected reconcile error of managed object %s", r.Object.ClientObject().GetName())
 			errcount++
 		}
 	}

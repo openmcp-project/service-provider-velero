@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 	commonapi "github.com/openmcp-project/openmcp-operator/api/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +69,7 @@ type VeleroStatus struct {
 
 	// Resources managed by this velero instance
 	// +optional
-	Resources []ManagedResource `json:"resources,omitempty"`
+	Resources []objectmanager.ManagedObject `json:"resources,omitempty"`
 }
 
 // ManagedResource defines a kubernetes object with its lifecycle phase

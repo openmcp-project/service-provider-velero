@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/openmcp-project/controller-utils v0.33.1
+	github.com/openmcp-project/extensibility-utils v0.1.1-0.20260925121607-afe187926766
 	github.com/openmcp-project/opencontrolplane-runtime v1.4.0
 	github.com/openmcp-project/openmcp-operator/api v1.4.1
 	github.com/openmcp-project/openmcp-operator/lib v1.4.1

@@ -18,9 +18,7 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"time"
 
@@ -28,12 +26,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider/clusteraccess"
@@ -45,8 +42,6 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/deployment"
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/namespace"
-	"github.com/openmcp-project/service-provider-velero/pkg/objectutils"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/openmcp-project/service-provider-velero/pkg/secret"
 )
 
@@ -59,62 +54,57 @@ type VeleroReconciler struct {
 	// PodNamespace is the namespace where this controller is deployed in.
 	PodNamespace string
 	// Create a manager for the obj to reconcile
-	CreateManager func(client.Object) resources.Manager
+	CreateManager func(client.Object) objectmanager.Manager
 }
 
 // CreateOrUpdate is called on every add or update event
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
-	serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results, err := mgr.Apply(ctx)
-	managedResources, resultContainsErrors := resultsToResources(ctx, results)
-	obj.Status.Resources = managedResources
-	if allResourcesReady(managedResources) && err == nil {
-		serviceprovider.StatusReady(obj)
+	obj.Status.Resources = results.ManagedObjects()
+	if err != nil {
+		log.FromContext(ctx).Error(err, "failed to create or update managed objects")
+		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
+		return ctrl.Result{}, err
 	}
-	if resultContainsErrors || err != nil {
-		resultWithErrors := errors.New("resources contain reconcile errors")
-		if err != nil {
-			resultWithErrors = fmt.Errorf("%w: %w", resultWithErrors, err)
-		}
-		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
-		return ctrl.Result{}, resultWithErrors
+	if results.Requeue {
+		serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+		return ctrl.Result{
+			RequeueAfter: time.Second * 5,
+		}, nil
 	}
+	serviceprovider.StatusReady(obj)
 	return ctrl.Result{}, nil
 }
 
 // Delete is called on every delete event
 func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
-	serviceprovider.StatusTerminating(obj)
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results, err := mgr.Delete(ctx)
-	managedResources, resultContainsErrors := resultsToResources(ctx, results)
-	obj.Status.Resources = managedResources
-	if resources.AllDeleted(results) && err == nil {
-		return ctrl.Result{}, nil
+	obj.Status.Resources = results.ManagedObjects()
+	if err != nil {
+		log.FromContext(ctx).Error(err, "failed to delete managed objects")
+		serviceprovider.StatusTerminatingWithReason(obj, "ReconcileError", err.Error())
+		return ctrl.Result{}, err
 	}
-	if resultContainsErrors || err != nil {
-		resultWithErrors := errors.New("resources contain reconcile errors")
-		if err != nil {
-			resultWithErrors = fmt.Errorf("%w: %w", resultWithErrors, err)
-		}
-		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
-		return ctrl.Result{}, resultWithErrors
+	serviceprovider.StatusTerminating(obj)
+	if results.Requeue {
+		return ctrl.Result{
+			RequeueAfter: time.Second * 5,
+		}, nil
 	}
-	return ctrl.Result{
-		RequeueAfter: time.Second * 5,
-	}, nil
+	return ctrl.Result{}, nil
 }
 
-func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (resources.Manager, error) {
+func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (objectmanager.Manager, error) {
 	err := r.ensureInstanceID(ctx, obj)
 	if err != nil {
 		return nil, err
@@ -124,16 +114,16 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	if images == nil {
 		return nil, fmt.Errorf("%w: requested version is not available", ctrlerrors.ErrInvalidUserInput)
 	}
-	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster, clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluster)
-	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster, clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
+	workloadCluster := objectmanager.NewCluster(clusters.WorkloadCluster, instance.Namespace(obj), objectmanager.WorkloadCluster)
+	mcpCluster := objectmanager.NewCluster(clusters.MCPCluster, "velero", objectmanager.ManagedControlPlane)
 
 	// ### MCP RESOURCES ###
 	// set namespace deletion policy orphan to prevent deleting end user data that we are not aware of
-	namespace.Configure(mcpCluster, resources.Orphan)
+	namespace.Configure(mcpCluster, objectmanager.Orphan)
 	mcpServiceAccount := &authn.ManagedServiceAccount{
 		NamespacedName: types.NamespacedName{
 			Name:      "velero-server",
-			Namespace: mcpCluster.GetDefaultNamespace(),
+			Namespace: mcpCluster.DefaultNamespace(),
 		},
 	}
 	tokenFunc := mcpServiceAccount.Configure(workloadCluster, mcpCluster, pc.PollInterval())
@@ -145,9 +135,9 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	deployment.ConfigureMcp(mcpCluster, images["velero"], instance.GetID(obj))
 
 	// ### WORKLOAD RESOURCES ###
-	namespace.Configure(workloadCluster, resources.Delete)
+	namespace.Configure(workloadCluster, objectmanager.Delete)
 	secret.Configure(workloadCluster, r.PlatformCluster, pc.Spec.ImagePullSecrets, r.PodNamespace)
-	deployment.Configure(workloadCluster, mcpCluster.GetDefaultNamespace(), obj, pc.Spec.ImagePullSecrets, images, tokenFunc)
+	deployment.Configure(workloadCluster, mcpCluster.DefaultNamespace(), obj, pc.Spec.ImagePullSecrets, images, tokenFunc)
 
 	// ### MANAGE WORKLOAD AND MCP CLUSTER ###
 	// mgr := resources.NewManager(instance.GetID(obj))
@@ -157,51 +147,10 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 
 	// create cleaner to remove orphaned pull secret copies from workload cluster
 	secretsToKeep := append(slices.Clone(pc.Spec.ImagePullSecrets), mcpServiceAccount.SecretRef())
-	workloadSecretCleaner := secret.NewSecretCleaner(workloadCluster, workloadCluster.GetDefaultNamespace(), secretsToKeep)
+	workloadSecretCleaner := secret.NewSecretCleaner(workloadCluster, workloadCluster.DefaultNamespace(), secretsToKeep)
 	mgr.AddCleaner(workloadSecretCleaner)
 
 	return mgr, nil
-}
-
-func resultsToResources(ctx context.Context, results []resources.Result) ([]apiv1alpha1.ManagedResource, bool) {
-	l := log.FromContext(ctx)
-	containsError := false
-	resources := make([]apiv1alpha1.ManagedResource, 0, len(results))
-	for _, res := range results {
-		obj := res.Object.GetObject()
-		status := res.Object.GetStatus(apiv1alpha1.ResourceLocation(res.Cluster.GetClusterType()))
-		resources = append(resources, apiv1alpha1.ManagedResource{
-			TypedObjectReference: corev1.TypedObjectReference{
-				Kind:      reflect.TypeOf(obj).Elem().Name(),
-				Name:      obj.GetName(),
-				Namespace: nilIfEmptyString(obj.GetNamespace()),
-			},
-			Phase:    status.Phase,
-			Message:  status.Message,
-			Location: status.Location,
-		})
-		if res.Error != nil {
-			containsError = true
-			l.Error(res.Error, "reconcile error", "objectID", objectutils.ObjectID(obj))
-		}
-	}
-	return resources, containsError
-}
-
-func nilIfEmptyString(str string) *string {
-	if str == "" {
-		return nil
-	}
-	return ptr.To(str)
-}
-
-func allResourcesReady(resources []apiv1alpha1.ManagedResource) bool {
-	for _, res := range resources {
-		if res.Phase != apiv1alpha1.Ready {
-			return false
-		}
-	}
-	return true
 }
 
 // maps the requested components to their images

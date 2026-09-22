@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
+
 	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
@@ -26,13 +26,13 @@ func TestConfigure(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
-		cluster    resources.ManagedCluster
+		cluster    objectmanager.Cluster
 		wantErr    bool
 		wantErrors []string
 	}{
 		{
 			name:       "create and delete crds",
-			cluster:    resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, "default", resources.ManagedControlPlane),
+			cluster:    objectmanager.NewCluster(testutils.CreateFakeCluster(t, "mcp"), "default", objectmanager.ManagedControlPlane),
 			wantErr:    false,
 			wantErrors: []string{},
 		},
@@ -43,20 +43,20 @@ func TestConfigure(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, gotErr)
 			}
-			results := testutils.ExecApply(t, []resources.ManagedCluster{tt.cluster}, 13, tt.wantErrors)
-			retrieveCRDs(t, tt.cluster.GetClient(), results, controllerutil.OperationResultCreated)
-			results = testutils.ExecDelete(t, []resources.ManagedCluster{tt.cluster}, 13, tt.wantErrors)
-			retrieveCRDs(t, tt.cluster.GetClient(), results, resources.OperationResultOrphaned)
+			results := testutils.ExecApply(t, []objectmanager.Cluster{tt.cluster}, 13, tt.wantErrors)
+			retrieveCRDs(t, tt.cluster.Client(), results, controllerutil.OperationResultCreated)
+			results = testutils.ExecDelete(t, []objectmanager.Cluster{tt.cluster}, 13, tt.wantErrors)
+			retrieveCRDs(t, tt.cluster.Client(), results, objectmanager.OperationResultOrphaned)
 		})
 	}
 }
 
-func retrieveCRDs(t *testing.T, c client.Client, results []resources.Result, opResult controllerutil.OperationResult) {
+func retrieveCRDs(t *testing.T, c client.Client, results []objectmanager.Result, opResult controllerutil.OperationResult) {
 	t.Helper()
 	for _, r := range results {
 		obj := &apiextv1.CustomResourceDefinition{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: r.Object.GetObject().GetName(),
+				Name: r.Object.ClientObject().GetName(),
 			},
 		}
 		assert.NoError(t, c.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj))

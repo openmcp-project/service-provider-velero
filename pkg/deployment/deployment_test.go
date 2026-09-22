@@ -8,12 +8,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 
 	"github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
@@ -23,7 +23,7 @@ func TestConfigure(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
-		cluster          resources.ManagedCluster
+		cluster          objectmanager.Cluster
 		namespace        string
 		velero           *v1alpha1.Velero
 		imagePullSecrets []corev1.LocalObjectReference
@@ -34,7 +34,7 @@ func TestConfigure(t *testing.T) {
 	}{
 		{
 			name:    "create deployment with multiple plugins",
-			cluster: resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload"), &rest.Config{}, testNamespace, resources.WorkloadCluster),
+			cluster: objectmanager.NewCluster(testutils.CreateFakeCluster(t, "workload"), testNamespace, objectmanager.WorkloadCluster),
 			velero: &v1alpha1.Velero{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -72,7 +72,7 @@ func TestConfigure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Configure(tt.cluster, tt.namespace, tt.velero, tt.imagePullSecrets, tt.images, tt.tokenApplyFunc)
-			testutils.ExecApply(t, []resources.ManagedCluster{tt.cluster}, 1, tt.wantErrors)
+			testutils.ExecApply(t, []objectmanager.Cluster{tt.cluster}, 1, tt.wantErrors)
 			// verify deployment exists
 			dep := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -80,7 +80,7 @@ func TestConfigure(t *testing.T) {
 					Namespace: testNamespace,
 				},
 			}
-			assert.NoError(t, tt.cluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(dep), dep))
+			assert.NoError(t, tt.cluster.Client().Get(context.TODO(), client.ObjectKeyFromObject(dep), dep))
 
 			// verify deployment
 			assert.Equal(t, int32(1), *dep.Spec.Replicas)
@@ -114,14 +114,14 @@ func containsPlugin(initContainers []corev1.Container, images map[string]string,
 func TestConfigureMcp(t *testing.T) {
 	tests := []struct {
 		name       string // description of this test case
-		cluster    resources.ManagedCluster
+		cluster    objectmanager.Cluster
 		image      string
 		instance   string
 		wantErrors []string
 	}{
 		{
 			name:       "test scale zero mcp deployment",
-			cluster:    resources.NewManagedCluster(testutils.CreateFakeCluster(t, "mcp"), &rest.Config{}, testNamespace, resources.ManagedControlPlane),
+			cluster:    objectmanager.NewCluster(testutils.CreateFakeCluster(t, "mcp"), testNamespace, objectmanager.ManagedControlPlane),
 			image:      "velero/velero",
 			instance:   "test",
 			wantErrors: []string{},
@@ -130,7 +130,7 @@ func TestConfigureMcp(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ConfigureMcp(tt.cluster, tt.image, tt.instance)
-			testutils.ExecApply(t, []resources.ManagedCluster{tt.cluster}, 1, tt.wantErrors)
+			testutils.ExecApply(t, []objectmanager.Cluster{tt.cluster}, 1, tt.wantErrors)
 			// verify deployment exists
 			dep := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -138,7 +138,7 @@ func TestConfigureMcp(t *testing.T) {
 					Namespace: testNamespace,
 				},
 			}
-			assert.NoError(t, tt.cluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(dep), dep))
+			assert.NoError(t, tt.cluster.Client().Get(context.TODO(), client.ObjectKeyFromObject(dep), dep))
 			// verify deployment has 0 replicas
 			assert.Equal(t, int32(0), *dep.Spec.Replicas)
 		})

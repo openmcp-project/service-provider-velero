@@ -11,10 +11,11 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
+
 	"github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 const veleroName = "velero"
@@ -27,13 +28,13 @@ func getPodLabels(instance string) map[string]string {
 }
 
 // Configure add a managed Velero server deployment to the given cluster.
-func Configure(cluster resources.ManagedCluster, namespace string, obj *v1alpha1.Velero, imagePullSecrets []corev1.LocalObjectReference, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
-	deployment := resources.NewManagedObject(&appsv1.Deployment{
+func Configure(cluster objectmanager.Cluster, namespace string, obj *v1alpha1.Velero, imagePullSecrets []corev1.LocalObjectReference, images map[string]string, tokenApplyFunc authn.TokenApplyFunc) {
+	deployment := objectmanager.NewObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      veleroName,
-			Namespace: cluster.GetDefaultNamespace(),
+			Namespace: cluster.DefaultNamespace(),
 		},
-	}, resources.ManagedObjectContext{
+	}, objectmanager.ObjectConfig{
 		ReconcileFunc: func(_ context.Context, o client.Object) error {
 			oDeploy := o.(*appsv1.Deployment)
 
@@ -126,13 +127,12 @@ func Configure(cluster resources.ManagedCluster, namespace string, obj *v1alpha1
 			tokenApplyFunc(&oDeploy.Spec.Template.Spec)
 			return nil
 		},
-		StatusFunc: func(o client.Object, rl v1alpha1.ResourceLocation) resources.Status {
+		StatusFunc: func(o client.Object) objectmanager.ManagedObjectStatus {
 			deploy := o.(*appsv1.Deployment)
 			if !deploy.DeletionTimestamp.IsZero() {
-				return resources.Status{
-					Phase:    v1alpha1.Terminating,
-					Message:  "Deployment is terminating.",
-					Location: rl,
+				return objectmanager.ManagedObjectStatus{
+					Phase:   string(v1alpha1.Terminating),
+					Message: "Deployment is terminating.",
 				}
 			}
 
@@ -140,16 +140,14 @@ func Configure(cluster resources.ManagedCluster, namespace string, obj *v1alpha1
 			ready := deploy.Status.ReadyReplicas
 
 			if desired != ready {
-				return resources.Status{
-					Phase:    v1alpha1.Progressing,
-					Message:  "Waiting for all pods to become ready.",
-					Location: rl,
+				return objectmanager.ManagedObjectStatus{
+					Phase:   string(v1alpha1.Progressing),
+					Message: "Waiting for all pods to become ready.",
 				}
 			}
-			return resources.Status{
-				Phase:    v1alpha1.Ready,
-				Message:  "All pods are ready.",
-				Location: rl,
+			return objectmanager.ManagedObjectStatus{
+				Phase:   string(v1alpha1.Ready),
+				Message: "All pods are ready.",
 			}
 		},
 	})
@@ -157,15 +155,15 @@ func Configure(cluster resources.ManagedCluster, namespace string, obj *v1alpha1
 }
 
 // ConfigureMcp adds a managed Velero deployment object to the given cluster.
-func ConfigureMcp(cluster resources.ManagedCluster, image string, instance string) {
+func ConfigureMcp(cluster objectmanager.Cluster, image string, instance string) {
 	// workaround for Velero expecting a deployment called 'velero' on the same cluster it watches its API/CRDs
 	// we deploy a 0 scale deployment on the mcp
-	deployment := resources.NewManagedObject(&appsv1.Deployment{
+	deployment := objectmanager.NewObject(&appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      veleroName,
-			Namespace: cluster.GetDefaultNamespace(),
+			Namespace: cluster.DefaultNamespace(),
 		},
-	}, resources.ManagedObjectContext{
+	}, objectmanager.ObjectConfig{
 		ReconcileFunc: func(_ context.Context, o client.Object) error {
 			oDeploy := o.(*appsv1.Deployment)
 
@@ -196,28 +194,25 @@ func ConfigureMcp(cluster resources.ManagedCluster, image string, instance strin
 			}
 			return nil
 		},
-		StatusFunc: func(o client.Object, rl v1alpha1.ResourceLocation) resources.Status {
+		StatusFunc: func(o client.Object) objectmanager.ManagedObjectStatus {
 			deploy := o.(*appsv1.Deployment)
 			if !deploy.DeletionTimestamp.IsZero() {
-				return resources.Status{
-					Phase:    v1alpha1.Terminating,
-					Message:  "Deployment is terminating.",
-					Location: rl,
+				return objectmanager.ManagedObjectStatus{
+					Phase:   string(v1alpha1.Terminating),
+					Message: "Deployment is terminating.",
 				}
 			}
 			desired := ptr.Deref(deploy.Spec.Replicas, 1)
 			ready := deploy.Status.ReadyReplicas
 			if desired != ready {
-				return resources.Status{
-					Phase:    v1alpha1.Progressing,
-					Message:  "Waiting for all pods to become ready.",
-					Location: rl,
+				return objectmanager.ManagedObjectStatus{
+					Phase:   string(v1alpha1.Progressing),
+					Message: "Waiting for all pods to become ready.",
 				}
 			}
-			return resources.Status{
-				Phase:    v1alpha1.Ready,
-				Message:  "All pods are ready.",
-				Location: rl,
+			return objectmanager.ManagedObjectStatus{
+				Phase:   string(v1alpha1.Ready),
+				Message: "All pods are ready.",
 			}
 		},
 	})

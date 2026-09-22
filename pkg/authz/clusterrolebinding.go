@@ -7,20 +7,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
+
 	"github.com/openmcp-project/service-provider-velero/pkg/authn"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 const clusterRoleBindingName = "velero-server"
 
 // Configure adds a managed ClusterRoleBinding object to the given cluster.
 // The passed in service account is granted the cluster-admin role.
-func Configure(cluster resources.ManagedCluster, msa *authn.ManagedServiceAccount) {
-	crb := resources.NewManagedObject(&rbacv1.ClusterRoleBinding{
+func Configure(cluster objectmanager.Cluster, msa *authn.ManagedServiceAccount) {
+	crb := objectmanager.NewObject(&rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterRoleBindingName,
 		},
-	}, resources.ManagedObjectContext{
+	}, objectmanager.ObjectConfig{
 		ReconcileFunc: func(_ context.Context, o client.Object) error {
 			oCRB := o.(*rbacv1.ClusterRoleBinding)
 			oCRB.Subjects = []rbacv1.Subject{
@@ -37,7 +38,7 @@ func Configure(cluster resources.ManagedCluster, msa *authn.ManagedServiceAccoun
 			}
 			return nil
 		},
-		StatusFunc: resources.SimpleStatus,
+		StatusFunc: objectmanager.SimpleStatus,
 	})
 	cluster.AddObject(crb)
 }

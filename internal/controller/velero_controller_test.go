@@ -32,24 +32,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider/clusteraccess"
 
 	apiv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
 func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
+	clusterContext := fakeClusterContext(t)
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
 		obj             *apiv1alpha1.Velero
 		pc              *apiv1alpha1.ProviderConfig
 		clusters        clusteraccess.ClusterContext
-		manager         resources.Manager
+		manager         objectmanager.Manager
 		want            ctrl.Result
 		wantErr         bool
 		wantIgnoreError bool
@@ -83,10 +85,12 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					},
 				},
 			},
-			clusters: fakeClusterContext(t),
+			clusters: clusterContext,
 			manager: fakeManager{
-				results: []resources.Result{
-					fakeResult(apiv1alpha1.Ready, controllerutil.OperationResultCreated, resources.ManagedControlPlane, nil),
+				result: objectmanager.ReconcileResult{
+					Results: []objectmanager.Result{
+						fakeResult(clusterContext.MCPCluster, apiv1alpha1.Ready, controllerutil.OperationResultCreated, objectmanager.ManagedControlPlane, nil),
+					},
 				},
 			},
 			want:            ctrl.Result{},
@@ -121,13 +125,18 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					},
 				},
 			},
-			clusters: fakeClusterContext(t),
+			clusters: clusterContext,
 			manager: fakeManager{
-				results: []resources.Result{
-					fakeResult(apiv1alpha1.Progressing, controllerutil.OperationResultCreated, resources.ManagedControlPlane, nil),
+				result: objectmanager.ReconcileResult{
+					Requeue: true,
+					Results: []objectmanager.Result{
+						fakeResult(clusterContext.MCPCluster, apiv1alpha1.Progressing, controllerutil.OperationResultCreated, objectmanager.ManagedControlPlane, nil),
+					},
 				},
 			},
-			want:            ctrl.Result{},
+			want: ctrl.Result{
+				RequeueAfter: 5 * time.Second,
+			},
 			wantStatusPhase: serviceprovider.StatusPhaseProgressing,
 			wantErr:         false,
 		},
@@ -159,10 +168,13 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					},
 				},
 			},
-			clusters: fakeClusterContext(t),
+			clusters: clusterContext,
 			manager: fakeManager{
-				results: []resources.Result{
-					fakeResult(apiv1alpha1.Failed, controllerutil.OperationResultCreated, resources.ManagedControlPlane, errors.New("test")),
+				err: errors.New("apply failed"),
+				result: objectmanager.ReconcileResult{
+					Results: []objectmanager.Result{
+						fakeResult(clusterContext.MCPCluster, apiv1alpha1.Failed, controllerutil.OperationResultCreated, objectmanager.ManagedControlPlane, errors.New("test")),
+					},
 				},
 			},
 			want:    ctrl.Result{},
@@ -224,7 +236,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 				OnboardingCluster: onboardingCluster,
 				PlatformCluster:   testutils.CreateFakeCluster(t, "platform", tt.pc),
 				PodNamespace:      "openmcp-system",
-				CreateManager: func(o client.Object) resources.Manager {
+				CreateManager: func(o client.Object) objectmanager.Manager {
 					return tt.manager
 				},
 			}
@@ -255,13 +267,14 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 }
 
 func TestVeleroReconciler_Delete(t *testing.T) {
+	clusterContext := fakeClusterContext(t)
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
 		obj      *apiv1alpha1.Velero
 		pc       *apiv1alpha1.ProviderConfig
 		clusters clusteraccess.ClusterContext
-		manager  resources.Manager
+		manager  objectmanager.Manager
 		want     ctrl.Result
 		wantErr  bool
 	}{
@@ -293,10 +306,12 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 					},
 				},
 			},
-			clusters: fakeClusterContext(t),
+			clusters: clusterContext,
 			manager: fakeManager{
-				results: []resources.Result{
-					fakeResult(apiv1alpha1.Terminating, resources.OperationResultDeleted, resources.ManagedControlPlane, nil),
+				result: objectmanager.ReconcileResult{
+					Results: []objectmanager.Result{
+						fakeResult(clusterContext.MCPCluster, apiv1alpha1.Terminating, objectmanager.OperationResultDeleted, objectmanager.ManagedControlPlane, nil),
+					},
 				},
 			},
 			want:    ctrl.Result{},
@@ -330,10 +345,13 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 					},
 				},
 			},
-			clusters: fakeClusterContext(t),
+			clusters: clusterContext,
 			manager: fakeManager{
-				results: []resources.Result{
-					fakeResult(apiv1alpha1.Terminating, resources.OperationResultDeletionRequested, resources.ManagedControlPlane, nil),
+				result: objectmanager.ReconcileResult{
+					Requeue: true,
+					Results: []objectmanager.Result{
+						fakeResult(clusterContext.MCPCluster, apiv1alpha1.Terminating, objectmanager.OperationResultDeletionRequested, objectmanager.ManagedControlPlane, nil),
+					},
 				},
 			},
 			want: ctrl.Result{
@@ -369,10 +387,13 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 					},
 				},
 			},
-			clusters: fakeClusterContext(t),
+			clusters: clusterContext,
 			manager: fakeManager{
-				results: []resources.Result{
-					fakeResult(apiv1alpha1.Terminating, resources.OperationResultDeletionRequested, resources.ManagedControlPlane, errors.New("test")),
+				err: errors.New("delete failed"),
+				result: objectmanager.ReconcileResult{
+					Results: []objectmanager.Result{
+						fakeResult(clusterContext.MCPCluster, apiv1alpha1.Terminating, objectmanager.OperationResultDeletionRequested, objectmanager.ManagedControlPlane, errors.New("test")),
+					},
 				},
 			},
 			want:    ctrl.Result{},
@@ -385,7 +406,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 				OnboardingCluster: testutils.CreateFakeCluster(t, "onboarding", tt.obj),
 				PlatformCluster:   testutils.CreateFakeCluster(t, "platform", tt.pc),
 				PodNamespace:      "openmcp-system",
-				CreateManager: func(o client.Object) resources.Manager {
+				CreateManager: func(o client.Object) objectmanager.Manager {
 					return tt.manager
 				},
 			}
@@ -445,25 +466,25 @@ func createProviderConfig(availableImages []apiv1alpha1.AvailableVeleroImages) *
 	}
 }
 
-var _ resources.Manager = fakeManager{}
-var _ resources.ManagedObject = fakeObject{}
+var _ objectmanager.Manager = fakeManager{}
+var _ objectmanager.Object = fakeObject{}
 
 type fakeObject struct {
-	status resources.Status
+	status objectmanager.ManagedObjectStatus
 }
 
 // GetDeletionPolicy implements [resources.ManagedObject].
-func (f fakeObject) GetDeletionPolicy() resources.DeletionPolicy {
+func (f fakeObject) DeletionPolicy() objectmanager.DeletionPolicy {
 	panic("unimplemented")
 }
 
 // GetDependencies implements [resources.ManagedObject].
-func (f fakeObject) GetDependencies() []resources.ManagedObject {
+func (f fakeObject) Dependencies() []objectmanager.Object {
 	panic("unimplemented")
 }
 
 // GetObject implements [resources.ManagedObject].
-func (f fakeObject) GetObject() client.Object {
+func (f fakeObject) ClientObject() client.Object {
 	u := &unstructured.Unstructured{}
 	u.SetName("test")
 	u.SetNamespace("test")
@@ -476,7 +497,7 @@ func (f fakeObject) GetObject() client.Object {
 }
 
 // GetStatus implements [resources.ManagedObject].
-func (f fakeObject) GetStatus(apiv1alpha1.ResourceLocation) resources.Status {
+func (f fakeObject) Status() objectmanager.ManagedObjectStatus {
 	return f.status
 }
 
@@ -486,25 +507,26 @@ func (f fakeObject) Reconcile(ctx context.Context) error {
 }
 
 type fakeManager struct {
-	results []resources.Result
+	err    error
+	result objectmanager.ReconcileResult
 }
 
 // AddCluster implements [resources.Manager].
-func (f fakeManager) AddCluster(mc resources.ManagedCluster) {
+func (f fakeManager) AddCluster(mc objectmanager.Cluster) {
 }
 
 // Apply implements [resources.Manager].
-func (f fakeManager) Apply(context.Context) ([]resources.Result, error) {
-	return f.results, nil
+func (f fakeManager) Apply(context.Context) (objectmanager.ReconcileResult, error) {
+	return f.result, f.err
 }
 
 // Delete implements [resources.Manager].
-func (f fakeManager) Delete(context.Context) ([]resources.Result, error) {
-	return f.results, nil
+func (f fakeManager) Delete(context.Context) (objectmanager.ReconcileResult, error) {
+	return f.result, f.err
 }
 
 // AddCleaner implements [resources.Manager].
-func (f fakeManager) AddCleaner(oc resources.OrphanCleaner) {
+func (f fakeManager) AddCleaner(oc objectmanager.Cleaner) {
 }
 
 func fakeClusterContext(t *testing.T) clusteraccess.ClusterContext {
@@ -515,16 +537,15 @@ func fakeClusterContext(t *testing.T) clusteraccess.ClusterContext {
 	}
 }
 
-func fakeResult(phase apiv1alpha1.InstancePhase, opResult controllerutil.OperationResult, clusterType resources.ClusterType, err error) resources.Result {
-	return resources.Result{
+func fakeResult(cluster *clusters.Cluster, phase apiv1alpha1.InstancePhase, opResult controllerutil.OperationResult, clusterType objectmanager.ClusterType, err error) objectmanager.Result {
+	return objectmanager.Result{
 		Object: fakeObject{
-			status: resources.Status{
-				Phase:    phase,
-				Location: apiv1alpha1.ResourceLocation(clusterType),
+			status: objectmanager.ManagedObjectStatus{
+				Phase: string(phase),
 			},
 		},
 		OperationResult: opResult,
-		Cluster:         resources.NewManagedCluster(nil, nil, "", clusterType),
+		Cluster:         objectmanager.NewCluster(cluster, "", clusterType),
 		Error:           err,
 	}
 }

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,8 +17,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 )
 
 const (
@@ -99,7 +99,7 @@ func (m *ManagedServiceAccount) SecretRef() corev1.LocalObjectReference {
 }
 
 // Configure adds a managed ServiceAccount object to the given MCP cluster and a managed Secret object to the given workload cluster.
-func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.ManagedCluster, pollInterval time.Duration) TokenApplyFunc {
+func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster objectmanager.Cluster, pollInterval time.Duration) TokenApplyFunc {
 	// Add a service account on the remote cluster.
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,20 +107,20 @@ func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.
 			Namespace: m.Namespace,
 		},
 	}
-	msa := resources.NewManagedObject(sa, resources.ManagedObjectContext{
-		ReconcileFunc: resources.NoOp,
-		StatusFunc:    resources.SimpleStatus,
+	msa := objectmanager.NewObject(sa, objectmanager.ObjectConfig{
+		ReconcileFunc: objectmanager.NoOp,
+		StatusFunc:    objectmanager.SimpleStatus,
 	})
 	mcpCluster.AddObject(msa)
 
 	// Add a secret on the local cluster that contains a token for the remote service account.
-	secret := resources.NewManagedObject(&corev1.Secret{
+	secret := objectmanager.NewObject(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.kubeAPIAccess(),
-			Namespace: workloadCluster.GetDefaultNamespace(),
+			Namespace: workloadCluster.DefaultNamespace(),
 		},
-	}, resources.ManagedObjectContext{
-		DependsOn: []resources.ManagedObject{
+	}, objectmanager.ObjectConfig{
+		DependsOn: []objectmanager.Object{
 			msa,
 		},
 		ReconcileFunc: func(ctx context.Context, o client.Object) error {
@@ -135,13 +135,13 @@ func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.
 			nextReconcile := time.Now().Add(pollInterval).Add(time.Minute)
 			expirationTime, err := getTokenExpirationTime(oSecret)
 			if err != nil || expirationTime.Before(nextReconcile) {
-				rc, err := generateToken(ctx, mcpCluster.GetCluster(), mcpCluster.GetConfig(), m.NamespacedName, 1*time.Hour)
+				rc, err := generateToken(ctx, mcpCluster.Cluster(), mcpCluster.Cluster().RESTConfig(), m.NamespacedName, 1*time.Hour)
 				if err != nil {
 					return err
 				}
 				oSecret.Data = map[string][]byte{
 					"token":     []byte(rc.Token),
-					"namespace": []byte(mcpCluster.GetDefaultNamespace()),
+					"namespace": []byte(mcpCluster.DefaultNamespace()),
 					"ca.crt":    rc.CAData,
 				}
 				setTokenExpirationTime(oSecret, rc.TokenExpiry)
@@ -149,7 +149,7 @@ func (m *ManagedServiceAccount) Configure(workloadCluster, mcpCluster resources.
 
 			return nil
 		},
-		StatusFunc: resources.SimpleStatus,
+		StatusFunc: objectmanager.SimpleStatus,
 	})
 	workloadCluster.AddObject(secret)
 
@@ -207,8 +207,12 @@ func addOrReplaceVolumeMount(c *corev1.Container, vm corev1.VolumeMount) {
 	c.VolumeMounts = append(c.VolumeMounts, vm)
 }
 
-func applyToContainer(c *corev1.Container, remoteCluster resources.ManagedCluster) {
-	remoteHost, remotePort := remoteCluster.GetHostAndPort()
+func applyToContainer(c *corev1.Container, remoteCluster objectmanager.Cluster) {
+	hostWithPort := strings.TrimPrefix(remoteCluster.Cluster().RESTConfig().Host, "https://")
+	remoteHost, remotePort, found := strings.Cut(hostWithPort, ":")
+	if !found {
+		remotePort = "433"
+	}
 
 	addOrReplaceVolumeMount(c, corev1.VolumeMount{
 		Name:      serviceAccountVolume,

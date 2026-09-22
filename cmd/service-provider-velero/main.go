@@ -32,6 +32,7 @@ import (
 	crdutil "github.com/openmcp-project/controller-utils/pkg/crds"
 	"github.com/openmcp-project/controller-utils/pkg/fips"
 	"github.com/openmcp-project/controller-utils/pkg/logging"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	openmcpconst "github.com/openmcp-project/openmcp-operator/api/constants"
@@ -58,7 +59,6 @@ import (
 	"github.com/openmcp-project/service-provider-velero/api/crds"
 
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 
 	velerosv1alpha1 "github.com/openmcp-project/service-provider-velero/api/v1alpha1"
 	"github.com/openmcp-project/service-provider-velero/internal/controller"
@@ -337,8 +337,8 @@ func main() {
 			OnboardingCluster: onboardingCluster,
 			PlatformCluster:   platformCluster,
 			PodNamespace:      podNamespace,
-			CreateManager: func(obj client.Object) resources.Manager {
-				return resources.NewManager(instance.GetID(obj))
+			CreateManager: func(obj client.Object) objectmanager.Manager {
+				return objectmanager.NewManager(instance.GetID(obj))
 			},
 		}).
 		ClusterAccessReconciler(clusterAccessReconciler).

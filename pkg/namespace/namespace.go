@@ -4,19 +4,19 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 )
 
 // Configure adds a managed Namespace object to the given ManagedCluster.
-func Configure(cluster resources.ManagedCluster, deletionPolicy resources.DeletionPolicy) {
-	ns := resources.NewManagedObject(&corev1.Namespace{
+func Configure(cluster objectmanager.Cluster, deletionPolicy objectmanager.DeletionPolicy) {
+	ns := objectmanager.NewObject(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cluster.GetDefaultNamespace(),
+			Name: cluster.DefaultNamespace(),
 		},
-	}, resources.ManagedObjectContext{
-		ReconcileFunc:  resources.NoOp,
+	}, objectmanager.ObjectConfig{
+		ReconcileFunc:  objectmanager.NoOp,
 		DeletionPolicy: deletionPolicy,
-		StatusFunc:     resources.SimpleStatus,
+		StatusFunc:     objectmanager.SimpleStatus,
 	})
 	cluster.AddObject(ns)
 }

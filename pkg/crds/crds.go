@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 )
 
 var (
@@ -44,26 +44,26 @@ func Parse() ([]*apiextv1.CustomResourceDefinition, error) {
 }
 
 // Configure adds a set of managed CRD objects to the given cluster.
-func Configure(cluster resources.ManagedCluster) error {
+func Configure(cluster objectmanager.Cluster) error {
 	crds, err := Parse()
 	if err != nil {
 		return err
 	}
 
 	for _, desired := range crds {
-		crd := resources.NewManagedObject(&apiextv1.CustomResourceDefinition{
+		crd := objectmanager.NewObject(&apiextv1.CustomResourceDefinition{
 			ObjectMeta: v1.ObjectMeta{
 				Name: desired.Name,
 			},
-		}, resources.ManagedObjectContext{
+		}, objectmanager.ObjectConfig{
 			ReconcileFunc: func(_ context.Context, o client.Object) error {
 				oCRD := o.(*apiextv1.CustomResourceDefinition)
 				oCRD.Spec = desired.Spec
 				return nil
 			},
 			// orphan CRDs to prevent deleting end user data
-			DeletionPolicy: resources.Orphan,
-			StatusFunc:     resources.SimpleStatus,
+			DeletionPolicy: objectmanager.Orphan,
+			StatusFunc:     objectmanager.SimpleStatus,
 		})
 		cluster.AddObject(crd)
 	}

@@ -7,16 +7,15 @@ import (
 	"testing"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
+	"github.com/openmcp-project/extensibility-utils/pkg/objectmanager"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openmcp-project/service-provider-velero/pkg/meta"
-	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 	"github.com/openmcp-project/service-provider-velero/pkg/testutils"
 )
 
@@ -25,7 +24,7 @@ func TestConfigure(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
-		workloadCluster  resources.ManagedCluster
+		workloadCluster  objectmanager.Cluster
 		platformCluster  *clusters.Cluster
 		imagePullSecrets []corev1.LocalObjectReference
 		sourceNamespace  string
@@ -34,7 +33,7 @@ func TestConfigure(t *testing.T) {
 	}{
 		{
 			name:             "no image pull secrets defined",
-			workloadCluster:  resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload"), &rest.Config{}, "test", resources.WorkloadCluster),
+			workloadCluster:  objectmanager.NewCluster(testutils.CreateFakeCluster(t, "workload"), "test", objectmanager.WorkloadCluster),
 			platformCluster:  testutils.CreateFakeCluster(t, "platform"),
 			imagePullSecrets: nil,
 			sourceNamespace:  openmcpsystem,
@@ -42,7 +41,7 @@ func TestConfigure(t *testing.T) {
 		},
 		{
 			name:            "sync image pull secrets from platform to workload cluster",
-			workloadCluster: resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload"), &rest.Config{}, "test", resources.WorkloadCluster),
+			workloadCluster: objectmanager.NewCluster(testutils.CreateFakeCluster(t, "workload"), "test", objectmanager.WorkloadCluster),
 			platformCluster: testutils.CreateFakeCluster(t, "platform", &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -63,7 +62,7 @@ func TestConfigure(t *testing.T) {
 		},
 		{
 			name:            "requested to sync image pull secret that does not exist on platform cluster",
-			workloadCluster: resources.NewManagedCluster(testutils.CreateFakeCluster(t, "workload"), &rest.Config{}, "test", resources.WorkloadCluster),
+			workloadCluster: objectmanager.NewCluster(testutils.CreateFakeCluster(t, "workload"), "test", objectmanager.WorkloadCluster),
 			platformCluster: testutils.CreateFakeCluster(t, "platform"),
 			imagePullSecrets: []corev1.LocalObjectReference{
 				{
@@ -77,7 +76,7 @@ func TestConfigure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Configure(tt.workloadCluster, tt.platformCluster, tt.imagePullSecrets, tt.sourceNamespace)
-			testutils.ExecApply(t, []resources.ManagedCluster{tt.workloadCluster}, len(tt.imagePullSecrets), tt.wantErrors)
+			testutils.ExecApply(t, []objectmanager.Cluster{tt.workloadCluster}, len(tt.imagePullSecrets), tt.wantErrors)
 			// verify any secret is synchronized between
 			for _, ips := range tt.imagePullSecrets {
 				sourceSecret := &corev1.Secret{
@@ -89,13 +88,13 @@ func TestConfigure(t *testing.T) {
 				targetSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      ips.Name,
-						Namespace: tt.workloadCluster.GetDefaultNamespace(),
+						Namespace: tt.workloadCluster.DefaultNamespace(),
 					},
 				}
 
 				if !slices.Contains(tt.wantErrors, ips.Name) {
 					assert.NoError(t, tt.platformCluster.Client().Get(context.TODO(), client.ObjectKeyFromObject(sourceSecret), sourceSecret))
-					assert.NoError(t, tt.workloadCluster.GetClient().Get(context.TODO(), client.ObjectKeyFromObject(targetSecret), targetSecret))
+					assert.NoError(t, tt.workloadCluster.Client().Get(context.TODO(), client.ObjectKeyFromObject(targetSecret), targetSecret))
 					assert.Equal(t, sourceSecret.Data, targetSecret.Data)
 					assert.Equal(t, corev1.SecretTypeDockerConfigJson, targetSecret.Type, "secret type should be preserved")
 				}
@@ -107,7 +106,7 @@ func TestConfigure(t *testing.T) {
 func TestSecretCleaner_Cleanup(t *testing.T) {
 	tests := []struct {
 		name            string
-		cluster         resources.ManagedCluster
+		cluster         objectmanager.Cluster
 		targetNamespace string
 		secretsToKeep   []corev1.LocalObjectReference
 		wantSecrets     []string
@@ -188,7 +187,7 @@ func TestSecretCleaner_Cleanup(t *testing.T) {
 			assert.Empty(t, results)
 
 			secretList := &corev1.SecretList{}
-			require.NoError(t, tt.cluster.GetClient().List(context.Background(), secretList))
+			require.NoError(t, tt.cluster.Client().List(context.Background(), secretList))
 			gotNames := make([]string, 0, len(secretList.Items))
 			for _, s := range secretList.Items {
 				gotNames = append(gotNames, s.Name)
@@ -217,9 +216,9 @@ func unmanagedSecret(name, namespace string) *corev1.Secret {
 	}
 }
 
-func newFakeCluster(t *testing.T, namespace string, cl client.Client) resources.ManagedCluster {
+func newFakeCluster(t *testing.T, namespace string, cl client.Client) objectmanager.Cluster {
 	t.Helper()
-	return resources.NewManagedCluster(testutils.CreateFakeClusterFromClient("workload", cl), &rest.Config{}, namespace, resources.WorkloadCluster)
+	return objectmanager.NewCluster(testutils.CreateFakeClusterFromClient("workload", cl), namespace, objectmanager.WorkloadCluster)
 }
 
 type listErrClient struct{ client.Client }
