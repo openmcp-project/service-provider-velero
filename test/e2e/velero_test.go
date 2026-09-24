@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -71,11 +72,22 @@ func TestServiceProvider(t *testing.T) {
 				t.Error(err)
 				return ctx
 			}
-			// wait for minio (s3 compatible object storage) to be available
+			// wait for seaweedfs (s3 compatible object storage) to be available
 			if err := wait.For(conditions.New(workloadConfig.Client().Resources()).
-				DeploymentAvailable("minio", "velero")); err != nil {
+				DeploymentAvailable("seaweedfs", "velero")); err != nil {
 				t.Error(err)
 				return ctx
+			}
+			// wait for both buckets to be succesfully created
+			for _, jobName := range []string{"seaweedfs-setup-mcp-a", "seaweedfs-setup-mcp-b"} {
+				job := &batchv1.Job{}
+				job.SetName(jobName)
+				job.SetNamespace("velero")
+				if err := wait.For(conditions.New(workloadConfig.Client().Resources()).
+					JobCompleted(job)); err != nil {
+					t.Error(err)
+					return ctx
+				}
 			}
 			return ctx
 		}).

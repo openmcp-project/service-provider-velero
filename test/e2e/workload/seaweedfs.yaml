@@ -1,0 +1,168 @@
+# SeaweedFS is used as an S3-compatible object storage backend for e2e tests.
+# Apache 2.0 licensed: https://github.com/seaweedfs/seaweedfs
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: velero
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: velero
+  name: seaweedfs
+  labels:
+    component: seaweedfs
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      component: seaweedfs
+  template:
+    metadata:
+      labels:
+        component: seaweedfs
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:4.47
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - >
+              weed server
+              -dir=/data
+              -s3
+              -s3.port=8333
+              -s3.config=/etc/seaweedfs/s3.json
+              -s3.iam=false
+              -master.volumeSizeLimitMB=100
+              -volume.max=100
+          volumeMounts:
+            - name: s3-config
+              mountPath: /etc/seaweedfs
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8333
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: s3-config
+          configMap:
+            name: seaweedfs-s3-config
+        - name: data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: velero
+  name: seaweedfs-s3-config
+data:
+  s3.json: |
+    {
+      "sts": {
+        "signingKey": "seaweedfs-signing-key-for-e2e-tests"
+      },
+      "identities": [
+        {
+          "name": "velero",
+          "credentials": [
+            {
+              "accessKey": "seaweedfs",
+              "secretKey": "seaweedfs123"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: velero
+  name: seaweedfs
+  labels:
+    component: seaweedfs
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8333
+      targetPort: 8333
+      protocol: TCP
+  selector:
+    component: seaweedfs
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: velero
+  name: seaweedfs-setup-mcp-a
+  labels:
+    component: seaweedfs
+spec:
+  template:
+    metadata:
+      name: seaweedfs-setup-mcp-a
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: awscli
+          image: amazon/aws-cli:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - aws --endpoint-url http://seaweedfs:8333 s3 mb s3://velero-mcp-a
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "seaweedfs"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "seaweedfs123"
+            - name: AWS_DEFAULT_REGION
+              value: "seaweed"
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: velero
+  name: seaweedfs-setup-mcp-b
+  labels:
+    component: seaweedfs
+spec:
+  template:
+    metadata:
+      name: seaweedfs-setup-mcp-b
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: awscli
+          image: amazon/aws-cli:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - aws --endpoint-url http://seaweedfs:8333 s3 mb s3://velero-mcp-b
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "seaweedfs"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "seaweedfs123"
+            - name: AWS_DEFAULT_REGION
+              value: "seaweed"
