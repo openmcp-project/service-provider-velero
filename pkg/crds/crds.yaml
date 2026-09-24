@@ -124,8 +124,8 @@ spec:
                         type: string
                       message:
                         description:
-                          Message is a message about the current status
-                          of the repo maintenance.
+                          Message is a message about the current status of
+                          the repo maintenance.
                         type: string
                       result:
                         description: Result is the result of the repo maintenance.
@@ -134,9 +134,7 @@ spec:
                           - Failed
                         type: string
                       startTimestamp:
-                        description:
-                          StartTimestamp is the start time of the repo
-                          maintenance.
+                        description: StartTimestamp is the start time of the repo maintenance.
                         format: date-time
                         nullable: true
                         type: string
@@ -280,8 +278,8 @@ spec:
                             type: array
                           excludedResources:
                             description:
-                              ExcludedResources specifies the resources
-                              to which this hook spec does not apply.
+                              ExcludedResources specifies the resources to
+                              which this hook spec does not apply.
                             items:
                               type: string
                             nullable: true
@@ -304,8 +302,8 @@ spec:
                             type: array
                           labelSelector:
                             description:
-                              LabelSelector, if specified, filters the
-                              resources to which this hook spec applies.
+                              LabelSelector, if specified, filters the resources
+                              to which this hook spec applies.
                             nullable: true
                             properties:
                               matchExpressions:
@@ -361,9 +359,7 @@ spec:
                               PostHooks is a list of BackupResourceHooks to execute after storing the item in the backup.
                               These are executed after all "additional items" from item actions are processed.
                             items:
-                              description:
-                                BackupResourceHook defines a hook for a
-                                resource.
+                              description: BackupResourceHook defines a hook for a resource.
                               properties:
                                 exec:
                                   description: Exec defines an exec hook.
@@ -384,8 +380,8 @@ spec:
                                     onError:
                                       description:
                                         OnError specifies how Velero should
-                                        behave if it encounters an error executing
-                                        this hook.
+                                        behave if it encounters an error executing this
+                                        hook.
                                       enum:
                                         - Continue
                                         - Fail
@@ -407,9 +403,7 @@ spec:
                               PreHooks is a list of BackupResourceHooks to execute prior to storing the item in the backup.
                               These are executed before any "additional items" from item actions are processed.
                             items:
-                              description:
-                                BackupResourceHook defines a hook for a
-                                resource.
+                              description: BackupResourceHook defines a hook for a resource.
                               properties:
                                 exec:
                                   description: Exec defines an exec hook.
@@ -430,8 +424,8 @@ spec:
                                     onError:
                                       description:
                                         OnError specifies how Velero should
-                                        behave if it encounters an error executing
-                                        this hook.
+                                        behave if it encounters an error executing this
+                                        hook.
                                       enum:
                                         - Continue
                                         - Fail
@@ -575,8 +569,8 @@ spec:
                     properties:
                       matchExpressions:
                         description:
-                          matchExpressions is a list of label selector
-                          requirements. The requirements are ANDed.
+                          matchExpressions is a list of label selector requirements.
+                          The requirements are ANDed.
                         items:
                           description: |-
                             A label selector requirement is a selector that contains values, a key, and an operator that
@@ -584,8 +578,8 @@ spec:
                           properties:
                             key:
                               description:
-                                key is the label key that the selector
-                                applies to.
+                                key is the label key that the selector applies
+                                to.
                               type: string
                             operator:
                               description: |-
@@ -666,8 +660,8 @@ spec:
                   type: boolean
                 storageLocation:
                   description:
-                    StorageLocation is a string containing the name of
-                    a BackupStorageLocation where the backup should be stored.
+                    StorageLocation is a string containing the name of a
+                    BackupStorageLocation where the backup should be stored.
                   type: string
                 ttl:
                   description: |-
@@ -675,9 +669,7 @@ spec:
                     the Backup should be retained for.
                   type: string
                 uploaderConfig:
-                  description:
-                    UploaderConfig specifies the configuration for the
-                    uploader.
+                  description: UploaderConfig specifies the configuration for the uploader.
                   nullable: true
                   properties:
                     parallelFilesUpload:
@@ -688,13 +680,13 @@ spec:
                   type: object
                 volumeGroupSnapshotLabelKey:
                   description:
-                    VolumeGroupSnapshotLabelKey specifies the label key
-                    to group PVCs under a VGS.
+                    VolumeGroupSnapshotLabelKey specifies the label key to
+                    group PVCs under a VGS.
                   type: string
                 volumeSnapshotLocations:
                   description:
-                    VolumeSnapshotLocations is a list containing names
-                    of VolumeSnapshotLocations associated with this backup.
+                    VolumeSnapshotLocations is a list containing names of
+                    VolumeSnapshotLocations associated with this backup.
                   items:
                     type: string
                   type: array
@@ -759,8 +751,8 @@ spec:
                   type: string
                 hookStatus:
                   description:
-                    HookStatus contains information about the status of
-                    the hooks.
+                    HookStatus contains information about the status of the
+                    hooks.
                   nullable: true
                   properties:
                     hooksAttempted:
@@ -771,14 +763,16 @@ spec:
                       type: integer
                     hooksFailed:
                       description:
-                        HooksFailed is the total number of hooks which
-                        ended with an error
+                        HooksFailed is the total number of hooks which ended
+                        with an error
                       type: integer
                   type: object
                 phase:
                   description: Phase is the current state of the Backup.
                   enum:
                     - New
+                    - Queued
+                    - ReadyToStart
                     - FailedValidation
                     - InProgress
                     - WaitingForPluginOperations
@@ -810,6 +804,11 @@ spec:
                         filters that happen as items are processed.
                       type: integer
                   type: object
+                queuePosition:
+                  description: |-
+                    QueuePosition is the position of the backup in the queue.
+                    Only relevant when Phase is "Queued"
+                  type: integer
                 startTimestamp:
                   description: |-
                     StartTimestamp records the time a backup was started.
@@ -881,8 +880,8 @@ spec:
           name: Phase
           type: string
         - description:
-            LastValidationTime is the last time the backup store location
-            was validated
+            LastValidationTime is the last time the backup store location was
+            validated
           jsonPath: .status.lastValidationTime
           name: Last Validated
           type: date
@@ -919,8 +918,8 @@ spec:
               type: object
             spec:
               description:
-                BackupStorageLocationSpec defines the desired state of
-                a Velero BackupStorageLocation
+                BackupStorageLocationSpec defines the desired state of a
+                Velero BackupStorageLocation
               properties:
                 accessMode:
                   description:
@@ -948,8 +947,8 @@ spec:
                   properties:
                     key:
                       description:
-                        The key of the secret to select from.  Must be
-                        a valid secret key.
+                        The key of the secret to select from.  Must be a
+                        valid secret key.
                       type: string
                     name:
                       default: ""
@@ -981,11 +980,40 @@ spec:
                       description: Bucket is the bucket to use for object storage.
                       type: string
                     caCert:
-                      description:
-                        CACert defines a CA bundle to use when verifying
-                        TLS connections to the provider.
+                      description: |-
+                        CACert defines a CA bundle to use when verifying TLS connections to the provider.
+                        Deprecated: Use CACertRef instead.
                       format: byte
                       type: string
+                    caCertRef:
+                      description: |-
+                        CACertRef is a reference to a Secret containing the CA certificate bundle to use
+                        when verifying TLS connections to the provider. The Secret must be in the same
+                        namespace as the BackupStorageLocation.
+                      properties:
+                        key:
+                          description:
+                            The key of the secret to select from.  Must be
+                            a valid secret key.
+                          type: string
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        optional:
+                          description:
+                            Specify whether the Secret or its key must be
+                            defined
+                          type: boolean
+                      required:
+                        - key
+                      type: object
+                      x-kubernetes-map-type: atomic
                     prefix:
                       description:
                         Prefix is the path inside a bucket to use for Velero
@@ -1009,8 +1037,8 @@ spec:
               type: object
             status:
               description:
-                BackupStorageLocationStatus defines the observed state
-                of BackupStorageLocation
+                BackupStorageLocationStatus defines the observed state of
+                BackupStorageLocation
               properties:
                 accessMode:
                   description: |-
@@ -1100,9 +1128,7 @@ spec:
           jsonPath: .status.progress.totalBytes
           name: Total Bytes
           type: integer
-        - description:
-            Name of the Backup Storage Location where the backup data is
-            stored
+        - description: Name of the Backup Storage Location where the backup data is stored
           jsonPath: .spec.backupStorageLocation
           name: Storage Location
           type: string
@@ -1164,9 +1190,7 @@ spec:
                     If DataMover is "" or "velero", the built-in data mover will be used.
                   type: string
                 nodeOS:
-                  description:
-                    NodeOS is OS of the node where the DataDownload is
-                    processed.
+                  description: NodeOS is OS of the node where the DataDownload is processed.
                   enum:
                     - auto
                     - linux
@@ -1179,9 +1203,13 @@ spec:
                   type: string
                 snapshotID:
                   description:
-                    SnapshotID is the ID of the Velero backup snapshot
-                    to be restored from.
+                    SnapshotID is the ID of the Velero backup snapshot to
+                    be restored from.
                   type: string
+                snapshotSize:
+                  description: SnapshotSize is the logical size in Bytes of the snapshot.
+                  format: int64
+                  type: integer
                 sourceNamespace:
                   description: |-
                     SourceNamespace is the original namespace where the volume is backed up from.
@@ -1197,8 +1225,8 @@ spec:
                       type: string
                     pv:
                       description:
-                        PV is the name of the target PV that is created
-                        by Velero restore
+                        PV is the name of the target PV that is created by
+                        Velero restore
                       type: string
                     pvc:
                       description:
@@ -1242,9 +1270,7 @@ spec:
                   description: Message is a message about the DataDownload's status.
                   type: string
                 node:
-                  description:
-                    Node is name of the node where the DataDownload is
-                    processed.
+                  description: Node is name of the node where the DataDownload is processed.
                   type: string
                 phase:
                   description: Phase is the current state of the DataDownload.
@@ -1323,9 +1349,15 @@ spec:
           jsonPath: .status.progress.totalBytes
           name: Total Bytes
           type: integer
+        - description: Incremental bytes
+          format: int64
+          jsonPath: .status.incrementalBytes
+          name: Incremental Bytes
+          priority: 10
+          type: integer
         - description:
-            Name of the Backup Storage Location where this backup should
-            be stored
+            Name of the Backup Storage Location where this backup should be
+            stored
           jsonPath: .spec.backupStorageLocation
           name: Storage Location
           type: string
@@ -1341,8 +1373,8 @@ spec:
       schema:
         openAPIV3Schema:
           description:
-            DataUpload acts as the protocol between data mover plugins
-            and data mover controller for the datamover backup operation
+            DataUpload acts as the protocol between data mover plugins and
+            data mover controller for the datamover backup operation
           properties:
             apiVersion:
               description: |-
@@ -1385,8 +1417,8 @@ spec:
                       type: string
                     snapshotClass:
                       description:
-                        SnapshotClass is the name of the snapshot class
-                        that the volume snapshot is created with
+                        SnapshotClass is the name of the snapshot class that
+                        the volume snapshot is created with
                       type: string
                     storageClass:
                       description:
@@ -1432,8 +1464,8 @@ spec:
                   type: string
                 sourcePVC:
                   description:
-                    SourcePVC is the name of the PVC which the snapshot
-                    is taken for.
+                    SourcePVC is the name of the PVC which the snapshot is
+                    taken for.
                   type: string
               required:
                 - backupStorageLocation
@@ -1474,6 +1506,12 @@ spec:
                     as a result of the DataUpload.
                   nullable: true
                   type: object
+                incrementalBytes:
+                  description:
+                    IncrementalBytes holds the number of bytes new or changed
+                    since the last backup
+                  format: int64
+                  type: integer
                 message:
                   description: Message is a message about the DataUpload's status.
                   type: string
@@ -1489,8 +1527,8 @@ spec:
                   type: string
                 path:
                   description:
-                    Path is the full path of the snapshot volume being
-                    backed up.
+                    Path is the full path of the snapshot volume being backed
+                    up.
                   type: string
                 phase:
                   description: Phase is the current state of the DataUpload.
@@ -1590,8 +1628,8 @@ spec:
               type: object
             spec:
               description:
-                DeleteBackupRequestSpec is the specification for which
-                backups to delete.
+                DeleteBackupRequestSpec is the specification for which backups
+                to delete.
               properties:
                 backupName:
                   type: string
@@ -1667,9 +1705,7 @@ spec:
             metadata:
               type: object
             spec:
-              description:
-                DownloadRequestSpec is the specification for a download
-                request.
+              description: DownloadRequestSpec is the specification for a download request.
               properties:
                 target:
                   description: Target is what to download (e.g. logs for a backup).
@@ -1714,8 +1750,8 @@ spec:
                   type: string
                 expiration:
                   description:
-                    Expiration is when this DownloadRequest expires and
-                    can be deleted by the system.
+                    Expiration is when this DownloadRequest expires and can
+                    be deleted by the system.
                   format: date-time
                   nullable: true
                   type: string
@@ -1769,9 +1805,15 @@ spec:
           jsonPath: .status.progress.totalBytes
           name: Total Bytes
           type: integer
+        - description: Incremental bytes
+          format: int64
+          jsonPath: .status.incrementalBytes
+          name: Incremental Bytes
+          priority: 10
+          type: integer
         - description:
-            Name of the Backup Storage Location where this backup should
-            be stored
+            Name of the Backup Storage Location where this backup should be
+            stored
           jsonPath: .spec.backupStorageLocation
           name: Storage Location
           type: string
@@ -1828,8 +1870,8 @@ spec:
                   type: string
                 pod:
                   description:
-                    Pod is a reference to the pod containing the volume
-                    to be backed up.
+                    Pod is a reference to the pod containing the volume to
+                    be backed up.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -1891,8 +1933,8 @@ spec:
                   type: object
                 uploaderType:
                   description:
-                    UploaderType is the type of the uploader to handle
-                    the data transfer.
+                    UploaderType is the type of the uploader to handle the
+                    data transfer.
                   enum:
                     - kopia
                     - restic
@@ -1929,10 +1971,14 @@ spec:
                   format: date-time
                   nullable: true
                   type: string
-                message:
+                incrementalBytes:
                   description:
-                    Message is a message about the pod volume backup's
-                    status.
+                    IncrementalBytes holds the number of bytes new or changed
+                    since the last backup
+                  format: int64
+                  type: integer
+                message:
+                  description: Message is a message about the pod volume backup's status.
                   type: string
                 path:
                   description:
@@ -2023,9 +2069,7 @@ spec:
           jsonPath: .status.progress.totalBytes
           name: Total Bytes
           type: integer
-        - description:
-            Name of the Backup Storage Location where the backup data is
-            stored
+        - description: Name of the Backup Storage Location where the backup data is stored
           jsonPath: .spec.backupStorageLocation
           name: Storage Location
           type: string
@@ -2077,8 +2121,8 @@ spec:
                   type: boolean
                 pod:
                   description:
-                    Pod is a reference to the pod containing the volume
-                    to be restored.
+                    Pod is a reference to the pod containing the volume to
+                    be restored.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -2126,6 +2170,10 @@ spec:
                 snapshotID:
                   description: SnapshotID is the ID of the volume snapshot to be restored.
                   type: string
+                snapshotSize:
+                  description: SnapshotSize is the logical size in Bytes of the snapshot.
+                  format: int64
+                  type: integer
                 sourceNamespace:
                   description:
                     SourceNamespace is the original namespace for namaspace
@@ -2141,8 +2189,8 @@ spec:
                   type: object
                 uploaderType:
                   description:
-                    UploaderType is the type of the uploader to handle
-                    the data transfer.
+                    UploaderType is the type of the uploader to handle the
+                    data transfer.
                   enum:
                     - kopia
                     - restic
@@ -2150,8 +2198,8 @@ spec:
                   type: string
                 volume:
                   description:
-                    Volume is the name of the volume within the Pod to
-                    be restored.
+                    Volume is the name of the volume within the Pod to be
+                    restored.
                   type: string
               required:
                 - backupStorageLocation
@@ -2180,9 +2228,7 @@ spec:
                   nullable: true
                   type: string
                 message:
-                  description:
-                    Message is a message about the pod volume restore's
-                    status.
+                  description: Message is a message about the pod volume restore's status.
                   type: string
                 node:
                   description:
@@ -2322,8 +2368,8 @@ spec:
                             type: array
                           excludedResources:
                             description:
-                              ExcludedResources specifies the resources
-                              to which this hook spec does not apply.
+                              ExcludedResources specifies the resources to
+                              which this hook spec does not apply.
                             items:
                               type: string
                             nullable: true
@@ -2346,8 +2392,8 @@ spec:
                             type: array
                           labelSelector:
                             description:
-                              LabelSelector, if specified, filters the
-                              resources to which this hook spec applies.
+                              LabelSelector, if specified, filters the resources
+                              to which this hook spec applies.
                             nullable: true
                             properties:
                               matchExpressions:
@@ -2413,8 +2459,8 @@ spec:
                                     command:
                                       description:
                                         Command is the command and arguments
-                                        to execute from within a container after a
-                                        pod has been restored.
+                                        to execute from within a container after a pod
+                                        has been restored.
                                       items:
                                         type: string
                                       minItems: 1
@@ -2432,8 +2478,8 @@ spec:
                                     onError:
                                       description:
                                         OnError specifies how Velero should
-                                        behave if it encounters an error executing
-                                        this hook.
+                                        behave if it encounters an error executing this
+                                        hook.
                                       enum:
                                         - Continue
                                         - Fail
@@ -2458,9 +2504,8 @@ spec:
                                   properties:
                                     initContainers:
                                       description:
-                                        InitContainers is list of init
-                                        containers to be added to a pod during its
-                                        restore.
+                                        InitContainers is list of init containers
+                                        to be added to a pod during its restore.
                                       items:
                                         type: object
                                         x-kubernetes-preserve-unknown-fields: true
@@ -2584,8 +2629,8 @@ spec:
                     properties:
                       matchExpressions:
                         description:
-                          matchExpressions is a list of label selector
-                          requirements. The requirements are ANDed.
+                          matchExpressions is a list of label selector requirements.
+                          The requirements are ANDed.
                         items:
                           description: |-
                             A label selector requirement is a selector that contains values, a key, and an operator that
@@ -2593,8 +2638,8 @@ spec:
                           properties:
                             key:
                               description:
-                                key is the label key that the selector
-                                applies to.
+                                key is the label key that the selector applies
+                                to.
                               type: string
                             operator:
                               description: |-
@@ -2631,8 +2676,8 @@ spec:
                   type: array
                 preserveNodePorts:
                   description:
-                    PreserveNodePorts specifies whether to restore old
-                    nodePorts from backup.
+                    PreserveNodePorts specifies whether to restore old nodePorts
+                    from backup.
                   nullable: true
                   type: boolean
                 resourceModifier:
@@ -2694,20 +2739,18 @@ spec:
                     from the most recent successful backup created from this schedule.
                   type: string
                 uploaderConfig:
-                  description:
-                    UploaderConfig specifies the configuration for the
-                    restore.
+                  description: UploaderConfig specifies the configuration for the restore.
                   nullable: true
                   properties:
                     parallelFilesDownload:
                       description:
-                        ParallelFilesDownload is the concurrency number
-                        setting for restore.
+                        ParallelFilesDownload is the concurrency number setting
+                        for restore.
                       type: integer
                     writeSparseFiles:
                       description:
-                        WriteSparseFiles is a flag to indicate whether
-                        write files sparsely or not.
+                        WriteSparseFiles is a flag to indicate whether write
+                        files sparsely or not.
                       nullable: true
                       type: boolean
                   type: object
@@ -2735,8 +2778,8 @@ spec:
                   type: string
                 hookStatus:
                   description:
-                    HookStatus contains information about the status of
-                    the hooks.
+                    HookStatus contains information about the status of the
+                    hooks.
                   nullable: true
                   properties:
                     hooksAttempted:
@@ -2747,8 +2790,8 @@ spec:
                       type: integer
                     hooksFailed:
                       description:
-                        HooksFailed is the total number of hooks which
-                        ended with an error
+                        HooksFailed is the total number of hooks which ended
+                        with an error
                       type: integer
                   type: object
                 phase:
@@ -2774,8 +2817,8 @@ spec:
                   properties:
                     itemsRestored:
                       description:
-                        ItemsRestored is the number of items that have
-                        actually been restored so far
+                        ItemsRestored is the number of items that have actually
+                        been restored so far
                       type: integer
                     totalItems:
                       description: |-
@@ -2891,9 +2934,7 @@ spec:
               description: ScheduleSpec defines the specification for a Velero schedule
               properties:
                 paused:
-                  description:
-                    Paused specifies whether the schedule is paused or
-                    not
+                  description: Paused specifies whether the schedule is paused or not
                   type: boolean
                 schedule:
                   description: |-
@@ -2975,13 +3016,13 @@ spec:
                       type: array
                     hooks:
                       description:
-                        Hooks represent custom behaviors that should be
-                        executed at different phases of the backup.
+                        Hooks represent custom behaviors that should be executed
+                        at different phases of the backup.
                       properties:
                         resources:
                           description:
-                            Resources are hooks that should be executed
-                            when backing up individual instances of a resource.
+                            Resources are hooks that should be executed when
+                            backing up individual instances of a resource.
                           items:
                             description: |-
                               BackupResourceHookSpec defines one or more BackupResourceHooks that should be executed based on
@@ -3021,15 +3062,14 @@ spec:
                                 type: array
                               labelSelector:
                                 description:
-                                  LabelSelector, if specified, filters
-                                  the resources to which this hook spec applies.
+                                  LabelSelector, if specified, filters the
+                                  resources to which this hook spec applies.
                                 nullable: true
                                 properties:
                                   matchExpressions:
                                     description:
                                       matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
+                                      selector requirements. The requirements are ANDed.
                                     items:
                                       description: |-
                                         A label selector requirement is a selector that contains values, a key, and an operator that
@@ -3088,8 +3128,8 @@ spec:
                                       properties:
                                         command:
                                           description:
-                                            Command is the command and
-                                            arguments to execute.
+                                            Command is the command and arguments
+                                            to execute.
                                           items:
                                             type: string
                                           minItems: 1
@@ -3134,8 +3174,8 @@ spec:
                                       properties:
                                         command:
                                           description:
-                                            Command is the command and
-                                            arguments to execute.
+                                            Command is the command and arguments
+                                            to execute.
                                           items:
                                             type: string
                                           minItems: 1
@@ -3384,8 +3424,8 @@ spec:
                       type: boolean
                     storageLocation:
                       description:
-                        StorageLocation is a string containing the name
-                        of a BackupStorageLocation where the backup should be stored.
+                        StorageLocation is a string containing the name of
+                        a BackupStorageLocation where the backup should be stored.
                       type: string
                     ttl:
                       description: |-
@@ -3394,20 +3434,20 @@ spec:
                       type: string
                     uploaderConfig:
                       description:
-                        UploaderConfig specifies the configuration for
-                        the uploader.
+                        UploaderConfig specifies the configuration for the
+                        uploader.
                       nullable: true
                       properties:
                         parallelFilesUpload:
                           description:
-                            ParallelFilesUpload is the number of files
-                            parallel uploads to perform when using the uploader.
+                            ParallelFilesUpload is the number of files parallel
+                            uploads to perform when using the uploader.
                           type: integer
                       type: object
                     volumeGroupSnapshotLabelKey:
                       description:
-                        VolumeGroupSnapshotLabelKey specifies the label
-                        key to group PVCs under a VGS.
+                        VolumeGroupSnapshotLabelKey specifies the label key
+                        to group PVCs under a VGS.
                       type: string
                     volumeSnapshotLocations:
                       description:
@@ -3522,8 +3562,8 @@ spec:
                   type: string
                 plugins:
                   description:
-                    Plugins list information about the plugins running
-                    on the Velero server
+                    Plugins list information about the plugins running on
+                    the Velero server
                   items:
                     description: PluginInfo contains attributes of a Velero plugin
                     properties:
@@ -3615,8 +3655,8 @@ spec:
                   properties:
                     key:
                       description:
-                        The key of the secret to select from.  Must be
-                        a valid secret key.
+                        The key of the secret to select from.  Must be a
+                        valid secret key.
                       type: string
                     name:
                       default: ""
@@ -3647,8 +3687,8 @@ spec:
               properties:
                 phase:
                   description:
-                    VolumeSnapshotLocationPhase is the lifecycle phase
-                    of a Velero VolumeSnapshotLocation.
+                    VolumeSnapshotLocationPhase is the lifecycle phase of
+                    a Velero VolumeSnapshotLocation.
                   enum:
                     - Available
                     - Unavailable
