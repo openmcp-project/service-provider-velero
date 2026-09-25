@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
+	semver "github.com/blang/semver/v4"
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	ctrlerrors "github.com/openmcp-project/controller-utils/pkg/errors"
 
@@ -64,7 +65,10 @@ type VeleroReconciler struct {
 
 // CreateOrUpdate is called on every add or update event
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
-	serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+	if err := validateRequestedVersion(obj.Spec.Version); err != nil {
+		serviceprovider.StatusProgressing(obj, "InvalidRequest", err.Error())
+		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
+	}
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
@@ -75,6 +79,8 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 	obj.Status.Resources = managedResources
 	if allResourcesReady(managedResources) && err == nil {
 		serviceprovider.StatusReady(obj)
+	} else {
+		serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
 	}
 	if resultContainsErrors || err != nil {
 		resultWithErrors := errors.New("resources contain reconcile errors")
@@ -85,6 +91,18 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 		return ctrl.Result{}, resultWithErrors
 	}
 	return ctrl.Result{}, nil
+}
+
+func validateRequestedVersion(version string) error {
+	requestedVersion, err := semver.ParseTolerant(version)
+	if err != nil {
+		return fmt.Errorf("%w: requested version (%s) is not valid", ctrlerrors.ErrInvalidUserInput, version)
+	}
+	versionWindow, _ := semver.ParseRange(">=1.16.0 <1.19.0")
+	if !versionWindow(requestedVersion) {
+		return fmt.Errorf("%w: requested version (%s) is not supported", ctrlerrors.ErrInvalidUserInput, version)
+	}
+	return nil
 }
 
 // Delete is called on every delete event

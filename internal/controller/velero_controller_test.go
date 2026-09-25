@@ -57,7 +57,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 	}{
 		{
 			name: "managed objects ready -> status ready",
-			obj: createVeleroObj("v1", createPlugins(map[string]string{
+			obj: createVeleroObj("v1.17.0", createPlugins(map[string]string{
 				"aws": "v2",
 			})),
 			pc: &apiv1alpha1.ProviderConfig{
@@ -72,7 +72,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
 						{
 							Name:     "velero",
-							Versions: []string{"v1"},
+							Versions: []string{"v1.17.0"},
 							Image:    "velero/velero",
 						},
 						{
@@ -95,7 +95,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		},
 		{
 			name: "managed objects not ready -> status progressing",
-			obj: createVeleroObj("v1", createPlugins(map[string]string{
+			obj: createVeleroObj("v1.17.0", createPlugins(map[string]string{
 				"aws": "v2",
 			})),
 			pc: &apiv1alpha1.ProviderConfig{
@@ -110,7 +110,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
 						{
 							Name:     "velero",
-							Versions: []string{"v1"},
+							Versions: []string{"v1.17.0"},
 							Image:    "velero/velero",
 						},
 						{
@@ -133,7 +133,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		},
 		{
 			name: "managed objects with errors -> error",
-			obj: createVeleroObj("v1", createPlugins(map[string]string{
+			obj: createVeleroObj("v1.17.0", createPlugins(map[string]string{
 				"aws": "v2",
 			})),
 			pc: &apiv1alpha1.ProviderConfig{
@@ -148,7 +148,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
 						{
 							Name:     "velero",
-							Versions: []string{"v1"},
+							Versions: []string{"v1.17.0"},
 							Image:    "velero/velero",
 						},
 						{
@@ -170,7 +170,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		},
 		{
 			name: "Velero version not available -> error",
-			obj: createVeleroObj("v3", createPlugins(
+			obj: createVeleroObj("v1.17.1", createPlugins(
 				map[string]string{
 					"aws": "v2",
 				},
@@ -178,7 +178,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			pc: createProviderConfig([]apiv1alpha1.AvailableVeleroImages{
 				{
 					Name:     "velero",
-					Versions: []string{"v1", "v2"},
+					Versions: []string{"v1.17.0", "v2"},
 					Image:    "velero/velero",
 				},
 				{
@@ -194,7 +194,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 		},
 		{
 			name: "Plugin version not available -> error",
-			obj: createVeleroObj("v1", createPlugins(
+			obj: createVeleroObj("v1.17.0", createPlugins(
 				map[string]string{
 					"aws": "v3",
 				},
@@ -202,7 +202,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 			pc: createProviderConfig([]apiv1alpha1.AvailableVeleroImages{
 				{
 					Name:     "velero",
-					Versions: []string{"v1", "v2"},
+					Versions: []string{"v1.17.0", "v2"},
 					Image:    "velero/velero",
 				},
 				{
@@ -526,5 +526,59 @@ func fakeResult(phase apiv1alpha1.InstancePhase, opResult controllerutil.Operati
 		OperationResult: opResult,
 		Cluster:         resources.NewManagedCluster(nil, nil, "", clusterType),
 		Error:           err,
+	}
+}
+
+func Test_validateRequestedVersion(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		version string
+		wantErr bool
+	}{
+		{
+			name:    "<v1.16.x (version range lower bound)",
+			version: "v1.15.0",
+			wantErr: true,
+		},
+		{
+			name:    "v1.16.x is supported",
+			version: "v1.16.0",
+			wantErr: false,
+		},
+		{
+			name:    "v1.17.x is supported",
+			version: "v1.17.2",
+			wantErr: false,
+		},
+		{
+			name:    "v1.18.x is supported",
+			version: "v1.18.99",
+			wantErr: false,
+		},
+		{
+			name:    ">v1.18.x (version range upper bound)",
+			version: "v1.19.0",
+			wantErr: true,
+		},
+		{
+			name:    "requesting non semver compliant version",
+			version: "not-a-valid-version",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotErr := validateRequestedVersion(tt.version)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("validataRequestedVersion() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("validataRequestedVersion() succeeded unexpectedly")
+			}
+		})
 	}
 }

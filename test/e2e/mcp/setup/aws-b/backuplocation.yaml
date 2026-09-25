@@ -12,7 +12,6 @@ spec:
     region: seaweed
     s3ForcePathStyle: "true"
     s3Url: http://seaweedfs.velero.svc:8333
-    checksumAlgorithm: ""
   default: true
   objectStorage:
     bucket: velero-mcp-b
