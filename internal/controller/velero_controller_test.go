@@ -127,7 +127,7 @@ func TestVeleroReconciler_CreateOrUpdate(t *testing.T) {
 					fakeResult(apiv1alpha1.Progressing, controllerutil.OperationResultCreated, resources.ManagedControlPlane, nil),
 				},
 			},
-			want:            ctrl.Result{},
+			want:            ctrl.Result{RequeueAfter: 10 * time.Second},
 			wantStatusPhase: serviceprovider.StatusPhaseProgressing,
 			wantErr:         false,
 		},

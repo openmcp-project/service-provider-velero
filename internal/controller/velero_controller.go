@@ -77,11 +77,6 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 	results, err := mgr.Apply(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
 	obj.Status.Resources = managedResources
-	if allResourcesReady(managedResources) && err == nil {
-		serviceprovider.StatusReady(obj)
-	} else {
-		serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
-	}
 	if resultContainsErrors || err != nil {
 		resultWithErrors := errors.New("resources contain reconcile errors")
 		if err != nil {
@@ -90,7 +85,14 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
-	return ctrl.Result{}, nil
+	if allResourcesReady(managedResources) {
+		serviceprovider.StatusReady(obj)
+		return ctrl.Result{}, nil
+	}
+	serviceprovider.StatusProgressing(obj, "Reconciling", "Reconcile in progress")
+	return ctrl.Result{
+		RequeueAfter: 10 * time.Second,
+	}, nil
 }
 
 func validateRequestedVersion(version string) error {
