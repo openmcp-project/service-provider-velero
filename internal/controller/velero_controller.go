@@ -65,10 +65,6 @@ type VeleroReconciler struct {
 
 // CreateOrUpdate is called on every add or update event
 func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
-	if err := validateRequestedVersion(obj.Spec.Version); err != nil {
-		serviceprovider.StatusProgressing(obj, "InvalidRequest", err.Error())
-		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
-	}
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
 		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
@@ -95,46 +91,37 @@ func (r *VeleroReconciler) CreateOrUpdate(ctx context.Context, obj *apiv1alpha1.
 	}, nil
 }
 
-func validateRequestedVersion(version string) error {
-	requestedVersion, err := semver.ParseTolerant(version)
-	if err != nil {
-		return fmt.Errorf("%w: requested version (%s) is not valid", ctrlerrors.ErrInvalidUserInput, version)
-	}
-	versionWindow, _ := semver.ParseRange(">=1.16.0 <1.19.0")
-	if !versionWindow(requestedVersion) {
-		return fmt.Errorf("%w: requested version (%s) is not supported", ctrlerrors.ErrInvalidUserInput, version)
-	}
-	return nil
-}
-
 // Delete is called on every delete event
 func (r *VeleroReconciler) Delete(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (ctrl.Result, error) {
-	serviceprovider.StatusTerminating(obj)
 	mgr, err := r.createObjectManager(ctx, obj, pc, clusters)
 	if err != nil {
-		serviceprovider.StatusProgressing(obj, "ReconcileError", err.Error())
+		serviceprovider.StatusTerminatingWithReason(obj, "ReconcileError", err.Error())
 		return ctrl.Result{}, ctrlerrors.IgnoreInvalidUserInput(err)
 	}
 	results, err := mgr.Delete(ctx)
 	managedResources, resultContainsErrors := resultsToResources(ctx, results)
 	obj.Status.Resources = managedResources
-	if resources.AllDeleted(results) && err == nil {
-		return ctrl.Result{}, nil
-	}
 	if resultContainsErrors || err != nil {
 		resultWithErrors := errors.New("resources contain reconcile errors")
 		if err != nil {
 			resultWithErrors = fmt.Errorf("%w: %w", resultWithErrors, err)
 		}
-		serviceprovider.StatusProgressing(obj, "ReconcileError", resultWithErrors.Error())
+		serviceprovider.StatusTerminatingWithReason(obj, "ReconcileError", resultWithErrors.Error())
 		return ctrl.Result{}, resultWithErrors
 	}
+	if resources.AllDeleted(results) {
+		return ctrl.Result{}, nil
+	}
+	serviceprovider.StatusTerminating(obj)
 	return ctrl.Result{
-		RequeueAfter: time.Second * 5,
+		RequeueAfter: time.Second * 10,
 	}, nil
 }
 
 func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1alpha1.Velero, pc *apiv1alpha1.ProviderConfig, clusters clusteraccess.ClusterContext) (resources.Manager, error) {
+	if err := validateRequestedVersion(obj.Spec.Version); err != nil {
+		return nil, err
+	}
 	err := r.ensureInstanceID(ctx, obj)
 	if err != nil {
 		return nil, err
@@ -181,6 +168,18 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	mgr.AddCleaner(workloadSecretCleaner)
 
 	return mgr, nil
+}
+
+func validateRequestedVersion(version string) error {
+	requestedVersion, err := semver.ParseTolerant(version)
+	if err != nil {
+		return fmt.Errorf("%w: requested version (%s) is not valid", ctrlerrors.ErrInvalidUserInput, version)
+	}
+	versionWindow, _ := semver.ParseRange(">=1.16.0 <1.19.0")
+	if !versionWindow(requestedVersion) {
+		return fmt.Errorf("%w: requested version (%s) is not supported", ctrlerrors.ErrInvalidUserInput, version)
+	}
+	return nil
 }
 
 func resultsToResources(ctx context.Context, results []resources.Result) ([]apiv1alpha1.ManagedResource, bool) {

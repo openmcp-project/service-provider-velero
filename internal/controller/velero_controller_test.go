@@ -304,7 +304,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 		},
 		{
 			name: "managed objects not deleted -> requeue, status terminating",
-			obj: createVeleroObj("v1", createPlugins(map[string]string{
+			obj: createVeleroObj("v1.17.2", createPlugins(map[string]string{
 				"aws": "v2",
 			})),
 			pc: &apiv1alpha1.ProviderConfig{
@@ -319,7 +319,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
 						{
 							Name:     "velero",
-							Versions: []string{"v1"},
+							Versions: []string{"v1.17.2"},
 							Image:    "velero/velero",
 						},
 						{
@@ -337,13 +337,13 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 				},
 			},
 			want: ctrl.Result{
-				RequeueAfter: 5 * time.Second,
+				RequeueAfter: 10 * time.Second,
 			},
 			wantErr: false,
 		},
 		{
 			name: "managed objects with errors -> error",
-			obj: createVeleroObj("v1", createPlugins(map[string]string{
+			obj: createVeleroObj("v1.17.2", createPlugins(map[string]string{
 				"aws": "v2",
 			})),
 			pc: &apiv1alpha1.ProviderConfig{
@@ -358,7 +358,7 @@ func TestVeleroReconciler_Delete(t *testing.T) {
 					AvailableImages: []apiv1alpha1.AvailableVeleroImages{
 						{
 							Name:     "velero",
-							Versions: []string{"v1"},
+							Versions: []string{"v1.17.2"},
 							Image:    "velero/velero",
 						},
 						{
