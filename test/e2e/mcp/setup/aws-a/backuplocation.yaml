@@ -9,9 +9,9 @@ spec:
     name: cloud-credentials
     key: cloud
   config:
-    region: minio
+    region: seaweed
     s3ForcePathStyle: "true"
-    s3Url: http://minio.velero.svc:9000
+    s3Url: http://seaweedfs.velero.svc:8333
   default: true
   objectStorage:
     bucket: velero-mcp-a
@@ -27,4 +27,4 @@ metadata:
   namespace: velero
 type: Opaque
 data:
-  cloud: W2RlZmF1bHRdCmF3c19hY2Nlc3Nfa2V5X2lkID0gbWluaW8KYXdzX3NlY3JldF9hY2Nlc3Nfa2V5ID0gbWluaW8xMjMK
+  cloud: W2RlZmF1bHRdCmF3c19hY2Nlc3Nfa2V5X2lkID0gc2Vhd2VlZGZzCmF3c19zZWNyZXRfYWNjZXNzX2tleSA9IHNlYXdlZWRmczEyMwo=
