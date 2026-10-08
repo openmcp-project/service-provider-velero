@@ -36,6 +36,20 @@ The Velero server runs on the **workload cluster**, while the Velero CRDs (Backu
 
 > 📡 **Note:** The Kubernetes nodes on the workload cluster where Velero runs must be able to resolve and reach any configured [backup storage locations](https://velero.io/docs/main/locations/).
 
+## Supported Velero Version Range
+
+The table below maps service provider versions to the Velero versions they support:
+
+| Version  | Velero Version Range                           |
+| -------- | ---------------------------------------------- |
+| v1.3.x   | >=v1.16.0 <v1.19.0                             |
+| < v1.3.x | unrestricted (tested with v1.16.x and v1.17.x) |
+
+Starting with v1.3.0, `service-provider-velero` enforces a hard version window in the controller. This was introduced to prevent using the service provider to manage Velero versions that have not yet been tested, e.g. Velero v1.18.x introduced new status enum values that broke backup functionality in older service provider versions. Versions prior to v1.3.0 perform no such check.
+
+The supported range can be further restricted at runtime by limiting which versions are listed in the [ProviderConfig](#providerconfig). Note that the controller-enforced range is a hard gate and cannot be widened via ProviderConfig.
+
+
 ## 🚦 Getting Started
 
 ### Prerequisites

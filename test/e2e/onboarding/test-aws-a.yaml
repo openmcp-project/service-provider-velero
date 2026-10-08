@@ -3,7 +3,7 @@ kind: Velero
 metadata:
   name: test-aws-a
 spec:
-  version: "v1.17.2"
+  version: "v1.18.3"
   plugins:
     - name: "aws"
-      version: "v1.13.2"
+      version: "v1.14.3"
