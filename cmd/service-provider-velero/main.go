@@ -259,6 +259,7 @@ func main() {
 		onboardingCluster, err := requestOnboardingClusterAccess(ctx, clusterAccessManager, platformCluster, adminPermissions, "init")
 		if err != nil {
 			setupLog.Error(err, "Failed to create and wait for onboarding cluster access")
+			os.Exit(1)
 		}
 
 		crdManager := crdutil.NewCRDManager(openmcpconst.ClusterLabel, crds.CRDs)
@@ -286,6 +287,7 @@ func main() {
 	onboardingCluster, err := requestOnboardingClusterAccess(ctx, clusterAccessManager, platformCluster, adminPermissions, "run")
 	if err != nil {
 		setupLog.Error(err, "Failed to create and wait for onboarding cluster access")
+		os.Exit(1)
 	}
 	// end sp specifics
 
