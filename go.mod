@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/openmcp-project/controller-utils v0.33.1
+	github.com/openmcp-project/controller-utils v0.33.2
 	github.com/openmcp-project/opencontrolplane-runtime v1.4.1
 	github.com/openmcp-project/openmcp-operator/api v1.4.1
 	github.com/openmcp-project/openmcp-operator/lib v1.4.1
