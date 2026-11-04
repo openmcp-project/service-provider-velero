@@ -32,6 +32,7 @@ import (
 	crdutil "github.com/openmcp-project/controller-utils/pkg/crds"
 	"github.com/openmcp-project/controller-utils/pkg/fips"
 	"github.com/openmcp-project/controller-utils/pkg/logging"
+	"github.com/openmcp-project/extensibility-utils/pkg/tokenrefresh"
 	"github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider"
 	clustersv1alpha1 "github.com/openmcp-project/openmcp-operator/api/clusters/v1alpha1"
 	openmcpconst "github.com/openmcp-project/openmcp-operator/api/constants"
@@ -51,12 +52,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	localaccess "github.com/openmcp-project/opencontrolplane-runtime/pkg/serviceprovider/clusteraccess"
 
 	"github.com/openmcp-project/service-provider-velero/api/crds"
 
+	"github.com/openmcp-project/service-provider-velero/pkg/authn"
 	"github.com/openmcp-project/service-provider-velero/pkg/instance"
 	"github.com/openmcp-project/service-provider-velero/pkg/resources"
 
@@ -347,6 +350,34 @@ func main() {
 		MustBuild()
 	if err := spr.SetupWithManager(mgr, providerName); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Velero")
+		os.Exit(1)
+	}
+	tokenRefresher := &tokenrefresh.Reconciler[*velerosv1alpha1.Velero]{
+		Client:              mgr.GetClient(),
+		ServiceProviderName: authn.TokenServiceProvider,
+		NewObject:           func() *velerosv1alpha1.Velero { return &velerosv1alpha1.Velero{} },
+		// only read access, the AccessRequests are managed by the Velero controller
+		Clusters: func(ctx context.Context, req reconcile.Request) (*clusters.Cluster, *clusters.Cluster, error) {
+			mcpCluster, err := clusterAccessReconciler.MCPCluster(ctx, req)
+			if err != nil {
+				return nil, nil, err
+			}
+			workloadCluster, err := clusterAccessReconciler.WorkloadCluster(ctx, req)
+			if err != nil {
+				return nil, nil, err
+			}
+			return mcpCluster, workloadCluster, nil
+		},
+		Binding: func(obj *velerosv1alpha1.Velero) (tokenrefresh.Binding, bool) {
+			// the instance namespace is known once the Velero controller has assigned the instance ID
+			if instance.GetID(obj) == "" {
+				return tokenrefresh.Binding{}, false
+			}
+			return controller.MCPServiceAccount().TokenBinding(instance.Namespace(obj)), true
+		},
+	}
+	if err := tokenRefresher.SetupWithManager(mgr, "velero-token-refresh"); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VeleroTokenRefresh")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

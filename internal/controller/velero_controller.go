@@ -51,6 +51,11 @@ import (
 	"github.com/openmcp-project/service-provider-velero/pkg/secret"
 )
 
+const (
+	// veleroMCPNamespace is the namespace on the MCP that contains the velero resources.
+	veleroMCPNamespace = "velero"
+)
+
 // VeleroReconciler reconciles a Velero object
 type VeleroReconciler struct {
 	// OnboardingCluster is the cluster where this controller watches Velero resources and reacts to their changes.
@@ -132,18 +137,15 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 		return nil, fmt.Errorf("%w: requested version is not available", ctrlerrors.ErrInvalidUserInput)
 	}
 	workloadCluster := resources.NewManagedCluster(clusters.WorkloadCluster, clusters.WorkloadCluster.RESTConfig(), instance.Namespace(obj), resources.WorkloadCluster)
-	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster, clusters.MCPCluster.RESTConfig(), "velero", resources.ManagedControlPlane)
+
+	mcpCluster := resources.NewManagedCluster(clusters.MCPCluster, clusters.MCPCluster.RESTConfig(), veleroMCPNamespace, resources.ManagedControlPlane)
 
 	// ### MCP RESOURCES ###
 	// set namespace deletion policy orphan to prevent deleting end user data that we are not aware of
 	namespace.Configure(mcpCluster, resources.Orphan)
-	mcpServiceAccount := &authn.ManagedServiceAccount{
-		NamespacedName: types.NamespacedName{
-			Name:      "velero-server",
-			Namespace: mcpCluster.GetDefaultNamespace(),
-		},
-	}
-	tokenFunc := mcpServiceAccount.Configure(workloadCluster, mcpCluster, pc.PollInterval())
+
+	mcpServiceAccount := MCPServiceAccount()
+	tokenFunc := mcpServiceAccount.Configure(workloadCluster, mcpCluster)
 	if err := crds.Configure(mcpCluster); err != nil {
 		return nil, err
 	}
@@ -168,6 +170,16 @@ func (r *VeleroReconciler) createObjectManager(ctx context.Context, obj *apiv1al
 	mgr.AddCleaner(workloadSecretCleaner)
 
 	return mgr, nil
+}
+
+// MCPServiceAccount returns the velero ServiceAccount on the MCP cluster.
+func MCPServiceAccount() *authn.ManagedServiceAccount {
+	return &authn.ManagedServiceAccount{
+		NamespacedName: types.NamespacedName{
+			Name:      "velero-server",
+			Namespace: veleroMCPNamespace,
+		},
+	}
 }
 
 func validateRequestedVersion(version string) error {
