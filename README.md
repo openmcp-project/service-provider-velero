@@ -36,6 +36,15 @@ The Velero server runs on the **workload cluster**, while the Velero CRDs (Backu
 
 > 📡 **Note:** The Kubernetes nodes on the workload cluster where Velero runs must be able to resolve and reach any configured [backup storage locations](https://velero.io/docs/main/locations/).
 
+### ManagedControlPlane Access
+
+The Velero server authenticates against the ManagedControlPlane with a token of the ServiceAccount `velero/velero-server` on the ManagedControlPlane. The token is stored in the Secret `kube-api-access-velero-server` in the tenant namespace on the workload cluster and mounted at `/var/run/secrets/kubernetes.io/serviceaccount`; `KUBERNETES_SERVICE_HOST`/`KUBERNETES_SERVICE_PORT` point to the ManagedControlPlane API server.
+
+- The Velero controller creates the Secret with an initial token.
+- A dedicated `velero-token-refresh` controller ([`extensibility-utils/pkg/tokenrefresh`](https://github.com/openmcp-project/extensibility-utils)) renews the token at 80% of its validity (1h tokens), independent of `spec.pollInterval`.
+- Token creation and expiration time are tracked in the annotations `velero.services.open-control-plane.io/token-creation-time` and `velero.services.open-control-plane.io/token-expiration-time`.
+- The Velero pod is not restarted on renewal: the kubelet updates the mounted Secret and the Kubernetes client re-reads the token file.
+
 ## Supported Velero Version Range
 
 The table below maps service provider versions to the Velero versions they support:
@@ -117,7 +126,7 @@ spec:
 
 | Field                             | Type        | Description                                               |
 | --------------------------------- | ----------- | --------------------------------------------------------- |
-| `spec.pollInterval`               | duration    | How often to reconcile and refresh service account tokens |
+| `spec.pollInterval`               | duration    | How often to reconcile to detect drift. Service account tokens are refreshed independently |
 | `spec.availableImages`            | []Image     | Allowed Velero and plugin images with their versions      |
 | `spec.availableImages[].name`     | string      | Image identifier (`velero` or plugin name)                |
 | `spec.availableImages[].versions` | []string    | Allowed versions for this image                           |
