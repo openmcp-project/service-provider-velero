@@ -126,7 +126,7 @@ spec:
 
 | Field                             | Type        | Description                                               |
 | --------------------------------- | ----------- | --------------------------------------------------------- |
-| `spec.pollInterval`               | duration    | How often to reconcile to detect drift. Service account tokens are refreshed independently |
+| `spec.pollInterval`               | duration    | How often to reconcile to detect drift                    |
 | `spec.availableImages`            | []Image     | Allowed Velero and plugin images with their versions      |
 | `spec.availableImages[].name`     | string      | Image identifier (`velero` or plugin name)                |
 | `spec.availableImages[].versions` | []string    | Allowed versions for this image                           |

@@ -118,5 +118,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-replace github.com/openmcp-project/extensibility-utils => ../extensibility-utils
