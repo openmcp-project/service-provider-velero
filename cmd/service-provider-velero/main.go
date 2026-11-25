@@ -368,12 +368,12 @@ func main() {
 			}
 			return mcpCluster, workloadCluster, nil
 		},
-		Binding: func(obj *velerosv1alpha1.Velero) (tokenrefresh.Binding, bool) {
+		Binding: func(_ context.Context, obj *velerosv1alpha1.Velero) (tokenrefresh.Binding, bool, error) {
 			// the instance namespace is known once the Velero controller has assigned the instance ID
 			if instance.GetID(obj) == "" {
-				return tokenrefresh.Binding{}, false
+				return tokenrefresh.Binding{}, false, nil
 			}
-			return controller.MCPServiceAccount().TokenBinding(instance.Namespace(obj)), true
+			return controller.MCPServiceAccount().TokenBinding(instance.Namespace(obj)), true, nil
 		},
 	}
 	if err := tokenRefresher.SetupWithManager(mgr, "velero-token-refresh"); err != nil {
