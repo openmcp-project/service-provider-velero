@@ -5,10 +5,10 @@ go 1.27.3
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/openmcp-project/controller-utils v0.34.0
-	github.com/openmcp-project/extensibility-utils v0.3.0
+	github.com/openmcp-project/extensibility-utils v0.4.0
 	github.com/openmcp-project/opencontrolplane-runtime v1.4.2
-	github.com/openmcp-project/openmcp-operator/api v1.4.4
-	github.com/openmcp-project/openmcp-operator/lib v1.4.4
+	github.com/openmcp-project/openmcp-operator/api v1.4.5
+	github.com/openmcp-project/openmcp-operator/lib v1.4.5
 	github.com/openmcp-project/openmcp-testing v1.4.2
 	github.com/spf13/pflag v1.1.0
 	github.com/stretchr/testify v1.12.1
